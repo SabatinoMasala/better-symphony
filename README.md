@@ -1,6 +1,6 @@
-# Symphony
+# Better Symphony
 
-A headless coding agent orchestrator that polls Linear for issues, dispatches AI agents (Claude Code), and manages the full development lifecycle.
+A headless coding agent orchestrator that polls issue trackers (Linear, GitHub Issues, GitHub PRs) for work items, dispatches AI agents (Claude Code), and manages the full development lifecycle.
 
 ## Quick Start
 
@@ -20,21 +20,23 @@ bun run src/cli.ts -w workflows/prd.md workflows/dev.md workflows/ralph.md
 
 ## How It Works
 
-Symphony uses **workflow files** (`workflows/*.md`) to define what the orchestrator does. Each workflow is a Markdown file with YAML frontmatter for configuration and a Liquid template for the agent prompt.
+Better Symphony uses **workflow files** (`workflows/*.md`) to define what the orchestrator does. Each workflow is a Markdown file with YAML frontmatter for configuration and a Liquid template for the agent prompt.
 
 ### Workflow Files
 
 - **`workflows/prd.md`** - PRD agent: analyzes issues and breaks complex ones into subtasks
 - **`workflows/dev.md`** - Dev agent: implements tasks directly
 - **`workflows/ralph.md`** - Ralph agent: loops through subtasks with fresh context per subtask
+- **`workflows/pr-review.md`** - PR review agent: reviews GitHub PRs, runs tests, and posts review comments
+- **`workflows/github-issues.md`** - GitHub Issues agent: implements tasks from GitHub Issues
 
-Each workflow specifies which Linear labels to watch for (e.g., `agent:dev`), so multiple workflows can run in parallel without conflicts.
+Each workflow specifies which labels to watch for (e.g., `agent:dev`), so multiple workflows can run in parallel without conflicts.
 
 ### Source Code
 
 - **`src/cli.ts`** - Entry point and argument parsing
 - **`src/orchestrator/`** - Poll loop, scheduling, concurrency control, and multi-workflow coordination
-- **`src/tracker/`** - Linear GraphQL client with rate limiting and pagination
+- **`src/tracker/`** - Tracker implementations (Linear GraphQL, GitHub Issues, GitHub PRs via `gh` CLI)
 - **`src/workspace/`** - Per-issue workspace creation/cleanup and shell hooks
 - **`src/agent/`** - Agent harness (spawns Claude CLI, parses stream-json output)
 - **`src/config/`** - YAML frontmatter + Liquid template parsing
@@ -42,7 +44,7 @@ Each workflow specifies which Linear labels to watch for (e.g., `agent:dev`), so
 
 ### Linear CLI
 
-Symphony injects a `SYMPHONY_LINEAR` env var into every agent process, pointing to a bundled Linear CLI (`src/linear-cli.ts`). Agents use it to update issues, swap labels, create subtasks, and post comments without needing separate API keys.
+Better Symphony injects a `SYMPHONY_LINEAR` env var into every agent process, pointing to a bundled Linear CLI (`src/linear-cli.ts`). Agents use it to update issues, swap labels, create subtasks, and post comments without needing separate API keys.
 
 ```bash
 bun $SYMPHONY_LINEAR get-issue SYM-123
@@ -54,7 +56,7 @@ bun $SYMPHONY_LINEAR create-comment SYM-123 "Done implementing"
 
 ### GitHub CLI
 
-For GitHub Issues integration, agents use the standard `gh` CLI directly. Symphony sets the `GH_REPO` environment variable automatically.
+For GitHub Issues integration, agents use the standard `gh` CLI directly. Better Symphony sets the `GH_REPO` environment variable automatically.
 
 ```bash
 gh issue view 123 --json number,title,body,state,labels,comments
@@ -153,6 +155,49 @@ You are working on **{{ issue.identifier }}** (#{{ issue.number }}): {{ issue.ti
 When done, use `gh issue edit {{ issue.number }} --add-label "agent:dev:done"` to mark completion.
 ```
 
+### GitHub PR Tracker
+
+For GitHub Pull Requests, use `kind: github-pr`:
+
+```yaml
+---
+tracker:
+  kind: github-pr
+  repo: owner/repo
+  active_states: [open]
+  terminal_states: [closed, merged]
+  excluded_labels: [review:complete]
+
+workspace:
+  root: ~/.symphony/workspaces
+
+hooks:
+  after_create: |
+    git clone git@github.com:owner/repo.git .
+  before_run: |
+    git fetch origin
+    git checkout {{ issue.branch_name }}
+    git merge origin/main --no-edit || true
+
+agent:
+  harness: claude
+  max_concurrent_agents: 1
+---
+
+You are reviewing **PR #{{ issue.number }}**: {{ issue.title }}
+
+**Branch:** `{{ issue.branch_name }}` → `{{ issue.base_branch }}`
+**Author:** {{ issue.author }}
+**Files changed:** {{ issue.files_changed }}
+
+## Description
+{{ issue.body | default: "No description provided" }}
+
+When done, use `gh pr edit {{ issue.number }} --add-label "review:complete"` to mark completion.
+```
+
+The GitHub PR tracker exposes additional template variables: `issue.branch_name`, `issue.base_branch`, `issue.author`, `issue.files_changed`, and `issue.comments`.
+
 ## Labels
 
 Each workflow watches for a specific label and adds status suffixes as it progresses:
@@ -180,3 +225,7 @@ To retry a failed issue: remove the `:error` label and re-add the base label.
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
+
+---
+
+Inspired by [openai/symphony](https://github.com/openai/symphony).
