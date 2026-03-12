@@ -27,6 +27,9 @@ export const FETCH_CANDIDATE_ISSUES = `
         url
         createdAt
         updatedAt
+        projectMilestone {
+          name
+        }
         state {
           id
           name
@@ -121,6 +124,9 @@ export const FETCH_ISSUES_BY_STATES = `
         url
         createdAt
         updatedAt
+        projectMilestone {
+          name
+        }
         state {
           id
           name

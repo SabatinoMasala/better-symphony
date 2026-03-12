@@ -228,6 +228,7 @@ export class LinearClient {
       comments,
       created_at: node.createdAt ? new Date(node.createdAt) : null,
       updated_at: node.updatedAt ? new Date(node.updatedAt) : null,
+      base_branch: node.projectMilestone?.name ?? undefined,
     };
   }
 

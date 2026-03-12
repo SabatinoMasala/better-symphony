@@ -23,9 +23,15 @@ hooks:
   after_create: |
     git clone git@github.com:SabatinoMasala/better-symphony.git .
   before_run: |
-    git fetch origin main
-    git checkout main
-    git reset --hard origin/main
+    BASE_BRANCH="main"
+    {% if issue.base_branch %}
+    if git ls-remote --exit-code --heads origin "{{ issue.base_branch }}" > /dev/null 2>&1; then
+      BASE_BRANCH="{{ issue.base_branch }}"
+    fi
+    {% endif %}
+    git fetch origin "$BASE_BRANCH"
+    git checkout "$BASE_BRANCH"
+    git reset --hard "origin/$BASE_BRANCH"
     git checkout -B {{ issue.branch_name }}
 
 agent:
@@ -79,7 +85,7 @@ After completing this subtask:
 
 2. Create PR:
    ```bash
-   gh pr create --title "{{ parent.identifier }}: {{ parent.title }}" --body "Implements all subtasks"
+   gh pr create --title "{{ parent.identifier }}: {{ parent.title }}" --body "Implements all subtasks" --base "{{ parent.base_branch | default: 'main' }}"
    ```
 
 3. Update parent issue:

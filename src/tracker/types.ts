@@ -50,6 +50,9 @@ export interface LinearIssueNode {
   url: string;
   createdAt: string;
   updatedAt: string;
+  projectMilestone?: {
+    name: string;
+  } | null;
   state: {
     id: string;
     name: string;
