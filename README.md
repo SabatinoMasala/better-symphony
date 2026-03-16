@@ -209,7 +209,7 @@ agent:
   yolobox_arguments: ["--claude-config"]    # extra args passed to yolobox before the agent flags
 ```
 
-This produces: `yolobox claude --claude-config -- -p "..." --output-format stream-json ...`
+This produces: `yolobox claude --claude-config -- -p "..." --output-format stream-json --verbose ...`
 
 When yolobox is enabled, Symphony automatically:
 - **Mounts** the Symphony source directory into the container (so `$SYMPHONY_LINEAR` resolves correctly)
