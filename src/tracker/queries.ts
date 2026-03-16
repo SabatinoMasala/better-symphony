@@ -265,3 +265,17 @@ export const CREATE_LABEL = `
     }
   }
 `;
+
+export const GET_ISSUE_ATTACHMENTS = `
+  query GetIssueAttachments($issueId: String!) {
+    issue(id: $issueId) {
+      attachments {
+        nodes {
+          id
+          title
+          url
+        }
+      }
+    }
+  }
+`;

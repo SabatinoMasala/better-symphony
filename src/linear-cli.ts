@@ -14,6 +14,8 @@
  *   symphony-linear swap-label SYM-123 --remove "agent:prd" --add "agent:prd:done"
  */
 
+import { mkdirSync, writeFileSync } from "fs";
+import { join, extname } from "path";
 import { LinearClient } from "./tracker/client.js";
 
 const LINEAR_ENDPOINT = "https://api.linear.app/graphql";
@@ -31,6 +33,110 @@ function createClient(): LinearClient {
   return new LinearClient(LINEAR_ENDPOINT, getApiKey());
 }
 
+/** Extract uploaded file URLs from Markdown text (images, file links, HTML img tags) */
+function extractUploadUrls(text: string): string[] {
+  const urls: Set<string> = new Set();
+
+  // ![alt](url) — images
+  const mdImageRe = /!\[[^\]]*\]\(([^)]+)\)/g;
+  for (const match of text.matchAll(mdImageRe)) {
+    urls.add(match[1]);
+  }
+
+  // [text](url) — file links (only Linear uploads, not arbitrary links)
+  const mdLinkRe = /(?<!!)\[[^\]]*\]\(([^)]+)\)/g;
+  for (const match of text.matchAll(mdLinkRe)) {
+    const url = match[1];
+    if (url.includes("uploads.linear.app")) {
+      urls.add(url);
+    }
+  }
+
+  // <img src="url"> or <img src='url'>
+  const htmlImgRe = /<img[^>]+src=["']([^"']+)["'][^>]*>/gi;
+  for (const match of text.matchAll(htmlImgRe)) {
+    urls.add(match[1]);
+  }
+
+  return [...urls];
+}
+
+/** Guess file extension from content-type header or URL */
+function guessExtension(url: string, contentType: string | null): string {
+  const ctMap: Record<string, string> = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/svg+xml": ".svg",
+    "application/pdf": ".pdf",
+    "application/zip": ".zip",
+    "text/plain": ".txt",
+  };
+  if (contentType) {
+    const base = contentType.split(";")[0].trim().toLowerCase();
+    if (ctMap[base]) return ctMap[base];
+  }
+  // Fall back to URL extension
+  try {
+    const pathname = new URL(url).pathname;
+    const ext = extname(pathname).toLowerCase();
+    if (ext) return ext;
+  } catch {}
+  // Default to .bin for unknown types
+  return ".bin";
+}
+
+/** Extract a filename stem from a URL — use last UUID-like segment or last path segment */
+function extractStem(url: string): string {
+  try {
+    const segments = new URL(url).pathname.split("/").filter(Boolean);
+    // Walk backwards to find a UUID-like segment
+    for (let i = segments.length - 1; i >= 0; i--) {
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segments[i])) {
+        return segments[i];
+      }
+    }
+    // Fall back to last segment without extension
+    const last = segments[segments.length - 1] || "image";
+    const dot = last.lastIndexOf(".");
+    return dot > 0 ? last.slice(0, dot) : last;
+  } catch {}
+  return `image-${Date.now()}`;
+}
+
+/** Download a single image, using auth for Linear-hosted URLs */
+async function downloadImage(
+  url: string,
+  outputDir: string,
+  apiKey: string
+): Promise<{ original_url: string; local_path: string } | { original_url: string; error: string }> {
+  try {
+    const headers: Record<string, string> = {};
+    if (url.includes("uploads.linear.app") || url.includes("linear.app")) {
+      headers["Authorization"] = apiKey;
+    }
+
+    const response = await fetch(url, { headers, redirect: "follow" });
+    if (!response.ok) {
+      return { original_url: url, error: `HTTP ${response.status}` };
+    }
+
+    const contentType = response.headers.get("content-type");
+    const ext = guessExtension(url, contentType);
+    const stem = extractStem(url);
+    const filename = `${stem}${ext}`;
+    const localPath = join(outputDir, filename);
+
+    const buffer = await response.arrayBuffer();
+    writeFileSync(localPath, Buffer.from(buffer));
+
+    return { original_url: url, local_path: localPath };
+  } catch (err) {
+    return { original_url: url, error: (err as Error).message };
+  }
+}
+
 function usage(): void {
   console.log(`Symphony Linear CLI
 
@@ -45,6 +151,7 @@ Commands:
   add-label <IDENTIFIER> "label-name"         Add a label
   remove-label <IDENTIFIER> "label-name"      Remove a label
   swap-label <IDENTIFIER> --remove "x" --add "y"  Swap labels atomically
+  download-attachments <IDENTIFIER> [--output dir] Download all attachments from issue
 
 Environment:
   LINEAR_API_KEY    Required. Linear API key.
@@ -238,6 +345,59 @@ async function main(): Promise<void> {
       const issue = await resolveIssue(client, identifier);
       await client.swapLabel(issue.id, removeName, addName, issue.team.id);
       console.log(JSON.stringify({ success: true, removed: removeName, added: addName }));
+      break;
+    }
+
+    case "download-attachments": {
+      const identifier = positional[0];
+      if (!identifier) {
+        console.error("Error: Issue identifier required");
+        process.exit(1);
+      }
+
+      const outputDir = flags.output || ".";
+      mkdirSync(outputDir, { recursive: true });
+
+      const issue = await resolveIssue(client, identifier);
+
+      // Collect image URLs from description and comments
+      const allUrls: Set<string> = new Set();
+
+      if (issue.description) {
+        for (const url of extractUploadUrls(issue.description)) {
+          allUrls.add(url);
+        }
+      }
+
+      if (issue.comments?.nodes) {
+        for (const comment of issue.comments.nodes) {
+          if (comment.body) {
+            for (const url of extractUploadUrls(comment.body)) {
+              allUrls.add(url);
+            }
+          }
+        }
+      }
+
+      // Also fetch attachments
+      const attachments = await client.getAttachments(issue.id);
+      for (const att of attachments) {
+        if (att.url) allUrls.add(att.url);
+      }
+
+      if (allUrls.size === 0) {
+        console.log(JSON.stringify({ images: [], message: "No images found" }));
+        break;
+      }
+
+      const apiKey = getApiKey();
+      const results = [];
+      for (const url of allUrls) {
+        const result = await downloadImage(url, outputDir, apiKey);
+        results.push(result);
+      }
+
+      console.log(JSON.stringify({ images: results }, null, 2));
       break;
     }
 

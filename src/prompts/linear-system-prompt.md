@@ -18,6 +18,18 @@ bun $SYMPHONY_LINEAR swap-label <IDENTIFIER>                       # Swap labels
     --remove "old-label" --add "new-label"
 ```
 
+### Downloading Attachments
+
+If an issue description or comments contain images (screenshots, diagrams, mockups, etc.), download them so you can view them:
+
+```
+bun $SYMPHONY_LINEAR download-attachments <IDENTIFIER> --output ./attachments
+```
+
+This extracts all image URLs from the issue description, comments, and Linear attachments, then downloads them to the specified directory. Output is a JSON manifest mapping original URLs to local file paths.
+
+**When to use:** Always download attachments before starting work on an issue that references visual content (UI mockups, screenshots of bugs, design specs, diagrams). The downloaded files can then be read directly to understand the visual context.
+
 ### Notes
 - `<IDENTIFIER>` is the issue identifier (e.g. SYM-123) or UUID
 - Priority values: 1=urgent, 2=high, 3=medium, 4=low

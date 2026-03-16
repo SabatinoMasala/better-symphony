@@ -511,6 +511,14 @@ export class LinearClient {
   }
 
   /**
+   * Get attachments for an issue
+   */
+  async getAttachments(issueId: string): Promise<Array<{ id: string; title: string | null; url: string }>> {
+    const response = await this.graphql<{ issue: { attachments: { nodes: Array<{ id: string; title: string | null; url: string }> } } }>(Q.GET_ISSUE_ATTACHMENTS, { issueId });
+    return response.data?.issue?.attachments?.nodes ?? [];
+  }
+
+  /**
    * Find a state ID by name within a team
    */
   async findStateId(teamId: string, stateName: string): Promise<string | null> {
