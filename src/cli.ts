@@ -95,9 +95,10 @@ function parseArgs(): CLIOptions {
         options.workflowPaths.push(...mdFiles);
       }
     }
-    // Fall back to WORKFLOW.md if no workflows found
     if (options.workflowPaths.length === 0) {
-      options.workflowPaths.push(resolve(callerCwd, "WORKFLOW.md"));
+      console.error("No workflow files found. Create a workflows/ directory with .md files, or specify paths explicitly.");
+      console.error("Run 'symphony --help' for usage information.");
+      process.exit(1);
     }
   }
 
