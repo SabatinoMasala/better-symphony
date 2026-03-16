@@ -119,6 +119,10 @@ export interface AgentConfig {
   max_iterations?: number | string;
   /** Claude harness: binary name or path (default: "claude") */
   binary?: string;
+  /** Run the agent binary inside yolobox */
+  yolobox?: boolean;
+  /** Extra arguments passed to yolobox (before the -- separator) */
+  yolobox_arguments?: string[];
   /** Claude harness: permission mode (default: "acceptEdits") */
   permission_mode?: string;
   /** Claude harness: append to system prompt */
@@ -169,6 +173,8 @@ export interface ServiceConfig {
     stall_timeout_ms: number;
     max_iterations: number;
     binary: string;
+    yolobox: boolean;
+    yolobox_arguments: string[];
     permission_mode: string;
     append_system_prompt: string | null;
     /** Docker sandbox template image (e.g. "claude-symphony:v1") */

@@ -212,6 +212,8 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
       stall_timeout_ms: parseIntOr(cfg.agent?.stall_timeout_ms, DEFAULT_STALL_TIMEOUT_MS),
       max_iterations: parseIntOr(cfg.agent?.max_iterations, 0),
       binary: cfg.agent?.binary || DEFAULT_CLAUDE_BINARY,
+      yolobox: cfg.agent?.yolobox === true,
+      yolobox_arguments: Array.isArray(cfg.agent?.yolobox_arguments) ? cfg.agent.yolobox_arguments : [],
       permission_mode: cfg.agent?.permission_mode || DEFAULT_PERMISSION_MODE,
       append_system_prompt: cfg.agent?.append_system_prompt || null,
       sandbox_template: cfg.agent?.sandbox_template || null,

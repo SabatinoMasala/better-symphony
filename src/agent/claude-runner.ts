@@ -207,34 +207,43 @@ export class ClaudeRunner {
 
     let spawnArgs: string[];
 
+    // Build the base command: either wrapped in yolobox or direct
+    // yolobox: yolobox <binary> [...yolobox_arguments] -- <claudeArgs>
+    // direct:  <binary> <claudeArgs>
+    const { binary, yolobox, yolobox_arguments } = config.agent;
+    const baseArgs = yolobox
+      ? ["yolobox", binary, ...yolobox_arguments, "--", ...claudeArgs]
+      : [binary, ...claudeArgs];
+
     if (sandbox) {
       // Ensure sandbox container exists
       this.sandboxName = await this.ensureSandbox();
 
-      // Run via docker sandbox: docker sandbox run SANDBOX_NAME -- claude args...
+      // Run via docker sandbox: docker sandbox run SANDBOX_NAME -- <baseArgs>
       spawnArgs = [
         "docker", "sandbox", "run",
         this.sandboxName,
         "--",
-        config.agent.binary,
-        ...claudeArgs,
+        ...baseArgs,
       ];
 
       logger.info("Launching Claude in sandbox", {
         issue_identifier: issue.identifier,
         sandbox_name: this.sandboxName,
         cwd: workspacePath,
-        binary: config.agent.binary,
+        binary,
+        yolobox,
         permission_mode: config.agent.permission_mode,
       });
     } else {
       // Run directly
-      spawnArgs = [config.agent.binary, ...claudeArgs];
+      spawnArgs = baseArgs;
 
       logger.info("Launching Claude", {
         issue_identifier: issue.identifier,
         cwd: workspacePath,
-        binary: config.agent.binary,
+        binary,
+        yolobox,
         permission_mode: config.agent.permission_mode,
       });
     }
