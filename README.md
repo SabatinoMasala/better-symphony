@@ -204,14 +204,14 @@ Better Symphony has first-class support for [Yolobox](https://github.com/anthrop
 
 ```yaml
 agent:
-  binary: "claude"                          # the agent binary yolobox runs (default: "claude")
+  harness: claude                           # which agent to run: claude, codex, opencode
   yolobox: true
   yolobox_arguments: ["--claude-config"]    # extra args passed to yolobox before the agent flags
 ```
 
 This produces: `yolobox claude --claude-config -- -p "..." --output-format stream-json ...`
 
-Without `yolobox: true`, the agent binary is invoked directly.
+Without `yolobox: true`, the harness binary is invoked directly.
 
 ## Labels
 
