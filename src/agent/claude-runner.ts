@@ -211,8 +211,31 @@ export class ClaudeRunner {
     // yolobox: yolobox <binary> [...yolobox_arguments] -- <claudeArgs>
     // direct:  <binary> <claudeArgs>
     const { binary, yolobox, yolobox_arguments } = config.agent;
+
+    // When running in yolobox, mount symphony dir and forward env vars into the container
+    const symphonyRoot = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+    const linearCliPath = new URL("../linear-cli.ts", import.meta.url).pathname;
+    const yoloboxExtraArgs: string[] = [];
+    if (yolobox) {
+      // Mount symphony source so $SYMPHONY_LINEAR path works inside the container
+      yoloboxExtraArgs.push("--mount", `${symphonyRoot}:${symphonyRoot}`);
+      // Forward env vars that yolobox doesn't auto-forward
+      const envVars: Record<string, string> = {
+        SYMPHONY_LINEAR: linearCliPath,
+        SYMPHONY_WORKSPACE: workspacePath,
+        SYMPHONY_ISSUE_ID: issue.id,
+        SYMPHONY_ISSUE_IDENTIFIER: issue.identifier,
+      };
+      if (process.env.LINEAR_API_KEY) {
+        envVars.LINEAR_API_KEY = process.env.LINEAR_API_KEY;
+      }
+      for (const [key, value] of Object.entries(envVars)) {
+        yoloboxExtraArgs.push("--env", `${key}=${value}`);
+      }
+    }
+
     const baseArgs = yolobox
-      ? ["yolobox", binary, ...yolobox_arguments, "--", ...claudeArgs]
+      ? ["yolobox", binary, ...yoloboxExtraArgs, ...yolobox_arguments, "--", ...claudeArgs]
       : [binary, ...claudeArgs];
 
     if (sandbox) {
