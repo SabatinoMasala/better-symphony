@@ -198,6 +198,21 @@ When done, use `gh pr edit {{ issue.number }} --add-label "review:complete"` to 
 
 The GitHub PR tracker exposes additional template variables: `issue.branch_name`, `issue.base_branch`, `issue.author`, `issue.files_changed`, and `issue.comments`.
 
+## Yolobox Support
+
+Better Symphony has first-class support for [Yolobox](https://github.com/anthropics/yolobox), a Docker-based sandbox for running agents. When enabled, the agent binary is launched inside a Yolobox container.
+
+```yaml
+agent:
+  binary: "claude"                          # the agent binary yolobox runs (default: "claude")
+  yolobox: true
+  yolobox_arguments: ["--claude-config"]    # extra args passed to yolobox before the agent flags
+```
+
+This produces: `yolobox claude --claude-config -- -p "..." --output-format stream-json ...`
+
+Without `yolobox: true`, the agent binary is invoked directly.
+
 ## Labels
 
 Each workflow watches for a specific label and adds status suffixes as it progresses:
