@@ -200,7 +200,7 @@ The GitHub PR tracker exposes additional template variables: `issue.branch_name`
 
 ## Yolobox Support
 
-Better Symphony has first-class support for [Yolobox](https://github.com/anthropics/yolobox), a Docker-based sandbox for running agents. When enabled, the agent binary is launched inside a Yolobox container.
+Better Symphony has first-class support for [Yolobox](https://github.com/finbarr/yolobox), a Docker-based sandbox for running agents. When enabled, the agent binary is launched inside a Yolobox container.
 
 ```yaml
 agent:
