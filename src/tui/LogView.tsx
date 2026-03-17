@@ -51,11 +51,36 @@ export function LogView({
 
   const visibleLines = lines.slice(startIdx, endIdx);
 
+  // Scrollbar indicator
+  const showScrollbar = totalLines > logHeight;
+  let thumbPos = 0;
+  let thumbSize = logHeight;
+  if (showScrollbar) {
+    const ratio = logHeight / totalLines;
+    thumbSize = Math.max(1, Math.round(ratio * logHeight));
+    const scrollFraction = totalLines <= logHeight ? 0 : startIdx / (totalLines - logHeight);
+    thumbPos = Math.round(scrollFraction * (logHeight - thumbSize));
+  }
+
   return (
-    <box flexDirection="column" height={logHeight + 2} overflow="hidden" border borderStyle="rounded" borderColor="#444444" paddingX={1}>
-      {visibleLines.map((line, i) => (
-        <LogLineRow key={startIdx + i} line={line} showSource={showSource} />
-      ))}
+    <box flexDirection="row" height={logHeight + 2} border borderStyle="rounded" borderColor="#444444" paddingLeft={1}>
+      <box flexDirection="column" flexGrow={1} overflow="hidden">
+        {visibleLines.map((line, i) => (
+          <LogLineRow key={startIdx + i} line={line} showSource={showSource} />
+        ))}
+      </box>
+      {showScrollbar && (
+        <box flexDirection="column" width={1}>
+          {Array.from({ length: logHeight }, (_, i) => {
+            const isThumb = i >= thumbPos && i < thumbPos + thumbSize;
+            return (
+              <box key={i} height={1}>
+                <text bg={isThumb ? "#7aa2f7" : "#333333"}> </text>
+              </box>
+            );
+          })}
+        </box>
+      )}
     </box>
   );
 }
