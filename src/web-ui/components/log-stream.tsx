@@ -7,6 +7,8 @@ import type { LogLine } from "../lib/use-sse";
 
 interface LogStreamProps {
   logs: LogLine[];
+  sourceFilter: string;
+  onSourceFilterChange: (source: string) => void;
 }
 
 const TYPE_COLORS: Record<LogLine["type"], string> = {
@@ -16,10 +18,9 @@ const TYPE_COLORS: Record<LogLine["type"], string> = {
   line: "text-foreground",
 };
 
-export function LogStream({ logs }: LogStreamProps) {
+export function LogStream({ logs, sourceFilter, onSourceFilterChange }: LogStreamProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoFollow, setAutoFollow] = useState(true);
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
 
   // Derive unique sources
   const sources = useMemo(() => {
@@ -50,12 +51,22 @@ export function LogStream({ logs }: LogStreamProps) {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Logs</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">
+          Logs
+          {sourceFilter !== "all" && (
+            <button
+              className="ml-2 text-xs text-blue-400 hover:text-blue-300"
+              onClick={() => onSourceFilterChange("all")}
+            >
+              (filtered: {sourceFilter}) &times;
+            </button>
+          )}
+        </h2>
         <div className="flex items-center gap-2">
           <select
             className="text-xs bg-muted border border-border rounded px-2 py-1 text-foreground"
             value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
+            onChange={(e) => onSourceFilterChange(e.target.value)}
           >
             <option value="all">All sources</option>
             {sources.map((s) => (

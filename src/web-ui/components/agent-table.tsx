@@ -4,9 +4,10 @@ import type { RuntimeSnapshot } from "../lib/use-sse";
 
 interface AgentTableProps {
   running: RuntimeSnapshot["running"];
+  onAgentClick?: (issueIdentifier: string) => void;
 }
 
-export function AgentTable({ running }: AgentTableProps) {
+export function AgentTable({ running, onAgentClick }: AgentTableProps) {
   if (running.length === 0) {
     return (
       <div className="rounded-lg border border-border p-8 text-center text-muted-foreground">
@@ -29,7 +30,11 @@ export function AgentTable({ running }: AgentTableProps) {
         </thead>
         <tbody>
           {running.map((agent) => (
-            <tr key={agent.issue_id} className="border-b border-border last:border-0 hover:bg-muted/30">
+            <tr
+              key={agent.issue_id}
+              className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer"
+              onClick={() => onAgentClick?.(agent.issue_identifier)}
+            >
               <td className="p-3 font-mono">{agent.issue_identifier}</td>
               <td className="p-3">
                 {agent.workflow ? (

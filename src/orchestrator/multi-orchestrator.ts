@@ -240,6 +240,7 @@ export class MultiOrchestrator {
     return {
       running: snapshots.flatMap((s) => s.running),
       retrying: snapshots.flatMap((s) => s.retrying),
+      workflows: snapshots.flatMap((s) => s.workflows),
       token_totals: {
         input_tokens: snapshots.reduce((sum, s) => sum + s.token_totals.input_tokens, 0),
         output_tokens: snapshots.reduce((sum, s) => sum + s.token_totals.output_tokens, 0),

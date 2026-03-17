@@ -147,6 +147,11 @@ export interface RuntimeSnapshot {
     error: string | null;
     workflow: string | null;
   }>;
+  workflows: Array<{
+    name: string;
+    max_concurrent_agents: number;
+    running_count: number;
+  }>;
   token_totals: TokenTotals;
   rate_limits: RateLimitInfo | null;
 }
@@ -182,6 +187,11 @@ export function createSnapshot(state: OrchestratorState, workflowName: string | 
   return {
     running,
     retrying,
+    workflows: [{
+      name: workflowName ?? "default",
+      max_concurrent_agents: state.max_concurrent_agents,
+      running_count: running.length,
+    }],
     token_totals: {
       ...state.token_totals,
       seconds_running: state.ended_seconds + activeSeconds,

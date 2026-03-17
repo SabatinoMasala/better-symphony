@@ -30,9 +30,9 @@ export function Header({ connected, startTime, onForcePoll, onRestart, onShutdow
   };
 
   return (
-    <header className="flex items-center justify-between border-b border-border px-6 py-3">
-      <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold">Better Symphony</h1>
+    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 sm:px-6 py-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <h1 className="text-lg font-semibold shrink-0">Better Symphony</h1>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <div className={`h-2 w-2 rounded-full ${connected ? "bg-success" : "bg-destructive"}`} />
           {connected ? "Connected" : "Disconnected"}

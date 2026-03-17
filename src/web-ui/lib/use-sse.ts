@@ -25,6 +25,11 @@ export interface RuntimeSnapshot {
     error: string | null;
     workflow: string | null;
   }>;
+  workflows: Array<{
+    name: string;
+    max_concurrent_agents: number;
+    running_count: number;
+  }>;
   token_totals: {
     input_tokens: number;
     output_tokens: number;
