@@ -11,19 +11,28 @@
     "start": "bun run src/cli.ts",
     "dev": "bun run --watch src/cli.ts",
     "linear": "bun run src/linear-cli.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:web": "bunx @tailwindcss/cli -i src/web-ui/globals.css -o dist/web/app.css --minify && bun build src/web-ui/main.tsx --outdir dist/web --minify && cp src/web-ui/index.html dist/web/index.html"
   },
   "dependencies": {
     "@opentui/core": "latest",
     "@opentui/react": "latest",
     "chokidar": "^4.0.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "liquidjs": "^10.21.0",
+    "lucide-react": "^0.577.0",
     "react": "^19.0.0",
+    "react-dom": "^19.2.4",
+    "tailwind-merge": "^3.5.0",
     "yaml": "^2.7.1"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.2.1",
     "@types/bun": "^1.3.9",
     "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.2.3",
+    "tailwindcss": "^4.2.1",
     "typescript": "^5.8.3"
   }
 }

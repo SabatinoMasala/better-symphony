@@ -21,6 +21,9 @@ interface CLIOptions {
   debug: boolean;
   dryRun: boolean;
   headless: boolean;
+  web: boolean;
+  webPort: number;
+  webHost: string;
 }
 
 // Resolve paths relative to the caller's cwd, not the script's cwd
@@ -34,6 +37,9 @@ function parseArgs(): CLIOptions {
     debug: false,
     dryRun: false,
     headless: false,
+    web: false,
+    webPort: 3000,
+    webHost: "0.0.0.0",
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -57,6 +63,12 @@ function parseArgs(): CLIOptions {
       options.dryRun = true;
     } else if (arg === "--headless") {
       options.headless = true;
+    } else if (arg === "--web") {
+      options.web = true;
+    } else if (arg === "--web-port") {
+      options.webPort = parseInt(args[++i], 10);
+    } else if (arg === "--web-host") {
+      options.webHost = args[++i];
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
       process.exit(0);
@@ -118,6 +130,9 @@ Options:
   -l, --log <path>           Log file path (appends JSON lines)
   --dry-run                  Render prompts for matching issues and print them (no agent launched)
   --headless                 Run without TUI (plain log output)
+  --web                      Start web dashboard (implies --headless)
+  --web-port <port>          Web dashboard port (default: 3000)
+  --web-host <host>          Web dashboard bind address (default: 0.0.0.0)
   -d, --debug                Debug mode: verbose logging + save prompts and agent transcripts to ~/.symphony/logs/
   -h, --help                 Show this help message
   -v, --version              Show version
@@ -129,6 +144,8 @@ Examples:
   symphony ./my-workflow.md                         # Run with custom workflow
   symphony -w dev.md qa.md                          # Override with specific workflows
   symphony --headless                               # Run without TUI
+  symphony --web                                    # Run with web dashboard
+  symphony --web --web-port 8080                    # Web dashboard on port 8080
   symphony --dry-run                                # Preview rendered prompts
 
 Environment Variables:
@@ -155,7 +172,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (options.headless) {
+  if (options.web) {
+    await runWeb(options);
+  } else if (options.headless) {
     await runHeadless(options);
   } else {
     await runTui(options);
@@ -204,6 +223,77 @@ async function runDryRun(options: CLIOptions): Promise<void> {
   }
 }
 
+// ── Shared Orchestrator Creation ─────────────────────────────────
+
+interface OrchestratorHandle {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  forcePoll(): Promise<void>;
+  getSnapshot(): any;
+}
+
+async function createOrchestrator(options: CLIOptions): Promise<OrchestratorHandle> {
+  if (options.workflowPaths.length > 1) {
+    const { MultiOrchestrator } = await import("./orchestrator/multi-orchestrator.js");
+    return new MultiOrchestrator({ workflowPaths: options.workflowPaths, debug: options.debug });
+  }
+  const { Orchestrator } = await import("./orchestrator/orchestrator.js");
+  return new Orchestrator({ workflowPath: options.workflowPaths[0], debug: options.debug });
+}
+
+// ── Web Mode ────────────────────────────────────────────────────
+
+async function runWeb(options: CLIOptions): Promise<void> {
+  if (options.debug) {
+    logger.setMinLevel("debug");
+  }
+
+  if (options.logFile) {
+    logger.addSink(createFileSink(options.logFile));
+  }
+
+  const orchestrator = await createOrchestrator(options);
+
+  const { startWebServer } = await import("./web/server.js");
+  const webServer = startWebServer({
+    port: options.webPort,
+    host: options.webHost,
+    orchestrator,
+  });
+
+  const shutdown = async (signal: string) => {
+    logger.info(`Received ${signal}, shutting down...`);
+    webServer.stop();
+    await orchestrator.stop();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+  process.on("uncaughtException", (err) => {
+    logger.error(`Uncaught exception: ${err.message}`, { stack: err.stack });
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logger.error(`Unhandled rejection: ${reason}`);
+    process.exit(1);
+  });
+
+  try {
+    await orchestrator.start();
+    const label = options.workflowPaths.length > 1
+      ? `${options.workflowPaths.length} workflows`
+      : "1 workflow";
+    logger.info(`Symphony is running (${label}) with web dashboard.`);
+  } catch (err) {
+    logger.error(`Failed to start: ${(err as Error).message}`);
+    webServer.stop();
+    process.exit(1);
+  }
+}
+
 // ── Headless Mode ───────────────────────────────────────────────
 
 async function runHeadless(options: CLIOptions): Promise<void> {
@@ -215,16 +305,7 @@ async function runHeadless(options: CLIOptions): Promise<void> {
     logger.addSink(createFileSink(options.logFile));
   }
 
-  const isMulti = options.workflowPaths.length > 1;
-  let orchestrator: { start(): Promise<void>; stop(): Promise<void>; getSnapshot(): any };
-
-  if (isMulti) {
-    const { MultiOrchestrator } = await import("./orchestrator/multi-orchestrator.js");
-    orchestrator = new MultiOrchestrator({ workflowPaths: options.workflowPaths, debug: options.debug });
-  } else {
-    const { Orchestrator } = await import("./orchestrator/orchestrator.js");
-    orchestrator = new Orchestrator({ workflowPath: options.workflowPaths[0], debug: options.debug });
-  }
+  const orchestrator = await createOrchestrator(options);
 
   const shutdown = async (signal: string) => {
     logger.info(`Received ${signal}, shutting down...`);
@@ -247,7 +328,9 @@ async function runHeadless(options: CLIOptions): Promise<void> {
 
   try {
     await orchestrator.start();
-    const label = isMulti ? `${options.workflowPaths.length} workflows` : "1 workflow";
+    const label = options.workflowPaths.length > 1
+      ? `${options.workflowPaths.length} workflows`
+      : "1 workflow";
     logger.info(`Symphony is running (${label}). Press Ctrl+C to stop.`);
 
     setInterval(() => {

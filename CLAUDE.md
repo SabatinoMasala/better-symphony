@@ -15,6 +15,8 @@ bun install                                    # Install dependencies
 bun run src/cli.ts                             # Start with TUI (auto-detects workflows/*.md)
 bun run src/cli.ts -w workflows/dev.md         # Run specific workflow(s)
 bun run src/cli.ts --headless                  # Run without TUI
+bun run src/cli.ts --web                       # Run with web dashboard (implies --headless)
+bun run src/cli.ts --web --web-port 8080       # Web dashboard on custom port (default: 3000)
 bun run src/cli.ts --dry-run                   # Preview rendered prompts, no agent launched
 bun run --watch src/cli.ts                     # Dev mode with file watching
 bun run src/linear-cli.ts                      # Standalone Linear CLI tool

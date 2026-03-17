@@ -1,8 +1,10 @@
 node_modules/
-dist/
+dist/*
+!dist/web/
 *.log
 .env
 .env.local
 .idea/
 /.claude/settings.local.json
+# Scratch files for yolobox
 scratch/

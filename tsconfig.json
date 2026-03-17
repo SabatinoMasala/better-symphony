@@ -16,5 +16,6 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/web-ui"]
 }
