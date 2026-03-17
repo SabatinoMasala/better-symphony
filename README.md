@@ -2,20 +2,49 @@
 
 A headless coding agent orchestrator that polls issue trackers (Linear, GitHub Issues, GitHub PRs) for work items, dispatches AI agents (Claude Code), and manages the full development lifecycle.
 
-## Quick Start
+## Installation
 
 ```bash
-# Install dependencies
+# Clone and install Symphony
+git clone https://github.com/AugmentCo/better-symphony.git
+cd better-symphony
 bun install
+
+# Optional: create a global alias so you can run `symphony` from anywhere
+alias symphony="bun run $(pwd)/src/cli.ts"
+```
+
+## Quick Start
+
+> **Important:** Symphony is run from **your project's directory**, not from inside the `better-symphony` repo. Your project should have a `workflows/` folder containing your workflow `.md` files. Symphony auto-detects `workflows/*.md` in the current working directory.
+
+```bash
+cd ~/your-project          # Your project with a workflows/ directory
 
 # Set your Linear API key
 export LINEAR_API_KEY=lin_api_xxxxx
 
-# Run a single workflow
-bun run src/cli.ts --workflow workflows/dev.md
+# Run all workflows in workflows/
+symphony
 
-# Run multiple workflows in one process (shared polling, fewer API calls)
-bun run src/cli.ts -w workflows/prd.md workflows/dev.md workflows/ralph.md
+# Or run specific workflow(s)
+symphony -w workflows/dev.md
+symphony -w workflows/prd.md workflows/dev.md workflows/ralph.md
+
+# If you didn't set up the alias, use the full path:
+bun run ~/path/to/better-symphony/src/cli.ts -w workflows/dev.md
+```
+
+### Project structure
+
+```
+your-project/
+├── workflows/
+│   ├── dev.md          # Your workflow files
+│   ├── prd.md
+│   └── pr-review.md
+├── src/                # Your project source code
+└── ...
 ```
 
 ## How It Works
@@ -23,6 +52,8 @@ bun run src/cli.ts -w workflows/prd.md workflows/dev.md workflows/ralph.md
 Better Symphony uses **workflow files** (`workflows/*.md`) to define what the orchestrator does. Each workflow is a Markdown file with YAML frontmatter for configuration and a Liquid template for the agent prompt.
 
 ### Workflow Files
+
+This repo includes example workflows you can copy into your project's `workflows/` directory:
 
 - **`workflows/prd.md`** - PRD agent: analyzes issues and breaks complex ones into subtasks
 - **`workflows/dev.md`** - Dev agent: implements tasks directly
