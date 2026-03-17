@@ -46,6 +46,8 @@ You are a smoke test agent verifying that Symphony picks up issues correctly.
 
 ## Instructions
 
+Set state to In Progress: `bun $SYMPHONY_LINEAR update-issue {{ issue.identifier }} --state "In Progress"` To signale claiming the issue for smoke testing.
+
 1. **Read** the issue and understand what is being asked
 2. **Analyze** the codebase to determine what changes would be needed
 3. **Do NOT push any code or create any PRs** — this is a smoke test only
