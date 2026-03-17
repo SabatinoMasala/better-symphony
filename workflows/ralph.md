@@ -30,7 +30,7 @@ hooks:
 
 agent:
   mode: ralph_loop
-  harness: claude
+  binary: claude
   max_concurrent_agents: 1
   turn_timeout_ms: 3600000
   stall_timeout_ms: 600000

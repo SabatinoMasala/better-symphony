@@ -28,7 +28,7 @@ hooks:
     git clean -fd
 
 agent:
-  harness: claude                     # Use Claude Code CLI
+  binary: claude                      # Use Claude Code CLI
   max_concurrent_agents: 2            # Process up to 2 issues in parallel
   max_turns: 20                       # Limit agent turns
   turn_timeout_ms: 3600000            # 1 hour timeout per turn

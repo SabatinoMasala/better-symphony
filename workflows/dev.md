@@ -30,7 +30,7 @@ hooks:
 
 agent:
     mode: default
-    harness: claude
+    binary: claude
     max_concurrent_agents: 2
     turn_timeout_ms: 3600000
     stall_timeout_ms: 300000

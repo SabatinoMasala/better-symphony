@@ -101,11 +101,15 @@ export interface HooksConfig {
   timeout_ms?: number | string;
 }
 
-export type AgentHarness = "claude" | "codex" | "opencode";
+export type AgentBinary = "claude" | "codex" | "opencode";
+/** @deprecated Use AgentBinary instead */
+export type AgentHarness = AgentBinary;
 
 export interface AgentConfig {
-  /** Agent harness: which CLI to use */
-  harness?: AgentHarness;
+  /** Which CLI binary to use (default: "claude"). Can also be a path. */
+  binary?: string;
+  /** @deprecated Use `binary` instead */
+  harness?: AgentBinary;
   /** Agent mode: "default" or "ralph_loop" (external subtask orchestration) */
   mode?: "default" | "ralph_loop";
   max_concurrent_agents?: number | string;
@@ -117,18 +121,14 @@ export interface AgentConfig {
   stall_timeout_ms?: number | string;
   /** Ralph loop: max subtasks per run (default: unlimited) */
   max_iterations?: number | string;
-  /** Claude harness: binary name or path (default: "claude") */
-  binary?: string;
   /** Run the agent binary inside yolobox */
   yolobox?: boolean;
   /** Extra arguments passed to yolobox (before the -- separator) */
   yolobox_arguments?: string[];
-  /** Claude harness: permission mode (default: "acceptEdits") */
+  /** Permission mode (default: "acceptEdits") */
   permission_mode?: string;
-  /** Claude harness: append to system prompt */
+  /** Append to system prompt */
   append_system_prompt?: string;
-  /** Docker sandbox template image (e.g. "claude-symphony:v1") */
-  sandbox_template?: string;
 }
 
 // ── Service Config (Typed View) ─────────────────────────────────
@@ -162,7 +162,7 @@ export interface ServiceConfig {
     timeout_ms: number;
   };
   agent: {
-    harness: AgentHarness;
+    binary: AgentBinary;
     mode: "default" | "ralph_loop";
     max_concurrent_agents: number;
     max_turns: number;
@@ -172,13 +172,10 @@ export interface ServiceConfig {
     turn_timeout_ms: number;
     stall_timeout_ms: number;
     max_iterations: number;
-    binary: string;
     yolobox: boolean;
     yolobox_arguments: string[];
     permission_mode: string;
     append_system_prompt: string | null;
-    /** Docker sandbox template image (e.g. "claude-symphony:v1") */
-    sandbox_template: string | null;
   };
 }
 
@@ -370,8 +367,7 @@ export type AgentErrorClass =
   | "response_error"
   | "turn_failed"
   | "turn_cancelled"
-  | "turn_input_required"
-  | "sandbox_failed";
+  | "turn_input_required";
 
 export class AgentError extends Error {
   constructor(

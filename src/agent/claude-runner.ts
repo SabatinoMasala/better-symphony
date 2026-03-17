@@ -71,16 +71,12 @@ export interface ClaudeRunnerOptions {
   abortSignal: AbortSignal;
   /** If set, write a human-readable transcript to this file path */
   transcriptPath?: string;
-  /** If true, run Claude inside a Docker sandbox container */
-  sandbox?: boolean;
 }
 
 export class ClaudeRunner {
   private options: ClaudeRunnerOptions;
   private proc: ReturnType<typeof Bun.spawn> | null = null;
   private session: LiveSession | null = null;
-  private sandboxName: string | null = null;
-
   constructor(options: ClaudeRunnerOptions) {
     this.options = options;
     // Initialize transcript file with header
@@ -88,66 +84,6 @@ export class ClaudeRunner {
       const header = `# Agent Transcript: ${options.issue.identifier}\nStarted: ${new Date().toISOString()}\n`;
       writeFileSync(options.transcriptPath, header, "utf-8");
     }
-  }
-
-  /**
-   * Ensure the Docker sandbox container exists, creating it if necessary.
-   * Returns the sandbox container name.
-   */
-  private async ensureSandbox(): Promise<string> {
-    const { issue, workspacePath } = this.options;
-    const sandboxName = issue.identifier;
-
-    // Check if sandbox already exists
-    const checkProc = Bun.spawn(["docker", "sandbox", "ls", "--format", "{{.Name}}"], {
-      cwd: workspacePath,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-
-    const checkOutput = await new Response(checkProc.stdout).text();
-    await checkProc.exited;
-
-    const existingSandboxes = checkOutput.trim().split("\n").filter(Boolean);
-
-    if (!existingSandboxes.includes(sandboxName)) {
-      logger.info("Creating Docker sandbox", {
-        issue_identifier: issue.identifier,
-        sandbox_name: sandboxName,
-      });
-
-      // Create the sandbox: docker sandbox create --name SYM-123 -t <template> claude .
-      const template = this.options.config.agent.sandbox_template ?? "claude-symphony:v1";
-      const createProc = Bun.spawn([
-        "docker", "sandbox", "create",
-        "--name", sandboxName,
-        "-t", template,
-        "claude", "."
-      ], {
-        cwd: workspacePath,
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-
-      const createStderr = await new Response(createProc.stderr).text();
-      const createExitCode = await createProc.exited;
-
-      if (createExitCode !== 0) {
-        throw new AgentError("sandbox_failed", `Failed to create sandbox: ${createStderr.slice(0, 200)}`);
-      }
-
-      logger.info("Docker sandbox created", {
-        issue_identifier: issue.identifier,
-        sandbox_name: sandboxName,
-      });
-    } else {
-      logger.info("Docker sandbox already exists", {
-        issue_identifier: issue.identifier,
-        sandbox_name: sandboxName,
-      });
-    }
-
-    return sandboxName;
   }
 
   private writeTranscript(line: string): void {
@@ -181,7 +117,7 @@ export class ClaudeRunner {
   }
 
   private async launchClaude(prompt: string): Promise<void> {
-    const { config, workspacePath, issue, sandbox } = this.options;
+    const { config, workspacePath, issue } = this.options;
 
     // Build Claude args: -p PROMPT --verbose --output-format stream-json --permission-mode X
     const claudeArgs: string[] = [
@@ -238,38 +174,15 @@ export class ClaudeRunner {
       ? ["yolobox", binary, ...yoloboxExtraArgs, ...yolobox_arguments, "--", ...claudeArgs]
       : [binary, ...claudeArgs];
 
-    if (sandbox) {
-      // Ensure sandbox container exists
-      this.sandboxName = await this.ensureSandbox();
+    spawnArgs = baseArgs;
 
-      // Run via docker sandbox: docker sandbox run SANDBOX_NAME -- <baseArgs>
-      spawnArgs = [
-        "docker", "sandbox", "run",
-        this.sandboxName,
-        "--",
-        ...baseArgs,
-      ];
-
-      logger.info("Launching Claude in sandbox", {
-        issue_identifier: issue.identifier,
-        sandbox_name: this.sandboxName,
-        cwd: workspacePath,
-        binary,
-        yolobox,
-        permission_mode: config.agent.permission_mode,
-      });
-    } else {
-      // Run directly
-      spawnArgs = baseArgs;
-
-      logger.info("Launching Claude", {
-        issue_identifier: issue.identifier,
-        cwd: workspacePath,
-        binary,
-        yolobox,
-        permission_mode: config.agent.permission_mode,
-      });
-    }
+    logger.info("Launching Claude", {
+      issue_identifier: issue.identifier,
+      cwd: workspacePath,
+      binary,
+      yolobox,
+      permission_mode: config.agent.permission_mode,
+    });
 
     this.proc = Bun.spawn(spawnArgs, {
       cwd: workspacePath,

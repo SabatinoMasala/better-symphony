@@ -243,7 +243,7 @@ export class Orchestrator {
     }
 
     logger.info("Symphony orchestrator started", {
-      harness: this.config.agent.harness,
+      binary: this.config.agent.binary,
       poll_interval_ms: this.config.polling.interval_ms,
       max_concurrent_agents: this.config.agent.max_concurrent_agents,
     });
@@ -421,7 +421,7 @@ export class Orchestrator {
       }
 
       logger.info("Workflow reloaded successfully", {
-        harness: newConfig.agent.harness,
+        binary: newConfig.agent.binary,
       });
     } catch (err) {
       logger.error(`Failed to reload workflow: ${(err as Error).message}`);
@@ -949,9 +949,9 @@ export class Orchestrator {
     abortController: AbortController,
     config: ServiceConfig
   ): Promise<void> {
-    const harness = config.agent.harness;
+    const binary = config.agent.binary;
 
-    if (harness === "claude") {
+    if (binary === "claude") {
       let transcriptPath: string | undefined;
       if (this.debug) {
         const logsDir = join(homedir(), ".symphony", "logs");
@@ -984,7 +984,7 @@ export class Orchestrator {
       });
       await runner.run();
     } else {
-      throw new Error(`Unsupported harness: ${harness}. Only "claude" is currently implemented.`);
+      throw new Error(`Unsupported binary: ${binary}. Only "claude" is currently implemented.`);
     }
   }
 

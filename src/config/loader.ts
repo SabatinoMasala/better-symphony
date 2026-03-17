@@ -12,6 +12,7 @@ import type {
   WorkflowDefinition,
   WorkflowConfig,
   ServiceConfig,
+  AgentBinary,
   Issue,
   ChildIssue,
   WorkflowError,
@@ -163,8 +164,8 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
     }
   }
 
-  // Resolve harness
-  const harness = cfg.agent?.harness || "claude";
+  // Resolve binary: `binary` takes precedence over deprecated `harness`
+  const binary = (cfg.agent?.binary || cfg.agent?.harness || DEFAULT_CLAUDE_BINARY) as AgentBinary;
 
   return {
     tracker: {
@@ -201,7 +202,7 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
       timeout_ms: parseIntOr(cfg.hooks?.timeout_ms, DEFAULT_HOOK_TIMEOUT_MS),
     },
     agent: {
-      harness,
+      binary,
       mode: cfg.agent?.mode === "ralph_loop" ? "ralph_loop" : "default",
       max_concurrent_agents: parseIntOr(cfg.agent?.max_concurrent_agents, DEFAULT_MAX_CONCURRENT_AGENTS),
       max_turns: parseIntOr(cfg.agent?.max_turns, DEFAULT_MAX_TURNS),
@@ -211,12 +212,10 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
       turn_timeout_ms: parseIntOr(cfg.agent?.turn_timeout_ms, DEFAULT_TURN_TIMEOUT_MS),
       stall_timeout_ms: parseIntOr(cfg.agent?.stall_timeout_ms, DEFAULT_STALL_TIMEOUT_MS),
       max_iterations: parseIntOr(cfg.agent?.max_iterations, 0),
-      binary: cfg.agent?.binary || DEFAULT_CLAUDE_BINARY,
       yolobox: cfg.agent?.yolobox === true,
       yolobox_arguments: Array.isArray(cfg.agent?.yolobox_arguments) ? cfg.agent.yolobox_arguments : [],
       permission_mode: cfg.agent?.permission_mode || DEFAULT_PERMISSION_MODE,
       append_system_prompt: cfg.agent?.append_system_prompt || null,
-      sandbox_template: cfg.agent?.sandbox_template || null,
     },
   };
 }
@@ -256,9 +255,9 @@ export function validateServiceConfig(config: ServiceConfig): ValidationResult {
     }
   }
 
-  const validHarnesses = ["claude", "codex", "opencode"];
-  if (!validHarnesses.includes(config.agent.harness)) {
-    errors.push(`agent.harness must be one of: ${validHarnesses.join(", ")}`);
+  const validBinaries = ["claude", "codex", "opencode"];
+  if (!validBinaries.includes(config.agent.binary)) {
+    errors.push(`agent.binary must be one of: ${validBinaries.join(", ")}`);
   }
 
   return {
