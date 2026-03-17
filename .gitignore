@@ -5,3 +5,4 @@ dist/
 .env.local
 .idea/
 /.claude/settings.local.json
+scratch/

@@ -1,22 +1,21 @@
-import { Box, Text, useInput, useApp, useStdout } from "ink";
-import { useEffect, useRef, useState } from "react";
+import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import type { CliRenderer } from "@opentui/core";
+import { useEffect, useRef } from "react";
 import { useOrchestrator } from "./useOrchestrator.js";
-import { Sidebar } from "./Sidebar.js";
+import { TabBar } from "./TabBar.js";
 import { LogView } from "./LogView.js";
-
-type FocusPanel = "sidebar" | "logs";
+import { StatusBar } from "./StatusBar.js";
 
 interface AppProps {
   workflowPaths: string[];
   logFile?: string;
   debug?: boolean;
+  renderer: CliRenderer;
 }
 
-export function App({ workflowPaths, logFile, debug }: AppProps) {
-  const { exit } = useApp();
-  const { stdout } = useStdout();
+export function App({ workflowPaths, logFile, debug, renderer }: AppProps) {
   const shutdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [focus, setFocus] = useState<FocusPanel>("logs");
+  const { height } = useTerminalDimensions();
 
   const {
     state,
@@ -37,72 +36,74 @@ export function App({ workflowPaths, logFile, debug }: AppProps) {
         clearTimeout(shutdownTimerRef.current);
         shutdownTimerRef.current = null;
       }
-      exit();
+      renderer.destroy();
     }
   }, [state.shuttingDown, state.snapshot]);
 
-  useInput((input, key) => {
+  useKeyboard((key) => {
     // Quit
-    if (input === "q" || key.escape) {
+    if (key.name === "q" || key.name === "escape" || (key.ctrl && key.name === "c")) {
       if (state.shuttingDown) {
-        exit();
+        renderer.destroy();
         return;
       }
       shutdown();
-      shutdownTimerRef.current = setTimeout(() => exit(), 3000);
+      shutdownTimerRef.current = setTimeout(() => renderer.destroy(), 3000);
       return;
     }
 
-    // Panel focus switching
-    if (key.leftArrow) {
-      setFocus("sidebar");
+    // Tab switching with [ and ]
+    if (key.name === "[") {
+      prevTab();
       return;
     }
-    if (key.rightArrow) {
-      setFocus("logs");
-      return;
-    }
-
-    // Up/down behavior depends on focused panel
-    if (input === "j" || key.downArrow) {
-      if (focus === "sidebar") {
-        nextTab();
-      } else {
-        scrollDown(1);
-      }
-      return;
-    }
-    if (input === "k" || key.upArrow) {
-      if (focus === "sidebar") {
-        prevTab();
-      } else {
-        scrollUp(1);
-      }
+    if (key.name === "]") {
+      nextTab();
       return;
     }
 
-    if (input === "G") {
+    // Tab switching with left/right arrows
+    if (key.name === "left") {
+      prevTab();
+      return;
+    }
+    if (key.name === "right") {
+      nextTab();
+      return;
+    }
+
+    // Scrolling
+    if (key.name === "j" || key.name === "down") {
+      scrollDown(1);
+      return;
+    }
+    if (key.name === "k" || key.name === "up") {
+      scrollUp(1);
+      return;
+    }
+
+    if (key.shift && key.name === "g") {
       scrollToBottom();
       return;
     }
 
-    if (input === "r") {
+    if (key.name === "r") {
       forcePoll();
       return;
     }
 
-    // Page scroll (always logs)
-    if (key.pageDown) {
+    // Page scroll
+    if (key.name === "pagedown") {
       scrollDown(10);
       return;
     }
-    if (key.pageUp) {
+    if (key.name === "pageup") {
       scrollUp(10);
       return;
     }
 
     // Number keys for tab jumping
-    const num = parseInt(input, 10);
+    const num = parseInt(key.name, 10);
     if (num >= 1 && num <= 9) {
       selectTab(num - 1);
     }
@@ -110,11 +111,11 @@ export function App({ workflowPaths, logFile, debug }: AppProps) {
 
   if (state.error) {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Text color="red" bold>
-          Error: {state.error}
-        </Text>
-      </Box>
+      <box flexDirection="column" padding={1} width="100%" height="100%">
+        <text>
+          <span fg="#FF4444"><strong>Error: {state.error}</strong></span>
+        </text>
+      </box>
     );
   }
 
@@ -124,26 +125,33 @@ export function App({ workflowPaths, logFile, debug }: AppProps) {
   const scrollOffset = state.scrollOffsets.get(currentTab) ?? 0;
   const autoFollow = state.autoFollow.get(currentTab) ?? true;
 
-  const termHeight = stdout?.rows ?? 24;
+  // TabBar: border(2) + content(1) = 3 rows
+  // StatusBar: border(2) + content(1) = 3 rows
+  // LogView border adds 2 rows on its own, so we pass inner height
+  const tabBarHeight = 3;
+  const statusBarHeight = 3;
+  const logHeight = Math.max(1, height - tabBarHeight - statusBarHeight - 2);
 
   return (
-    <Box flexDirection="row" height={termHeight}>
-      <Sidebar
+    <box flexDirection="column" width="100%" height="100%">
+      <TabBar
         tabs={state.tabs}
         selectedTab={state.selectedTab}
         snapshot={state.snapshot}
-        shuttingDown={state.shuttingDown}
-        height={termHeight}
-        focused={focus === "sidebar"}
       />
 
       <LogView
         lines={lines}
         scrollOffset={scrollOffset}
         autoFollow={autoFollow}
-        height={termHeight}
+        height={logHeight}
         showSource={showSource}
       />
-    </Box>
+
+      <StatusBar
+        snapshot={state.snapshot}
+        shuttingDown={state.shuttingDown}
+      />
+    </box>
   );
 }

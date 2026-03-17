@@ -6,7 +6,8 @@
 
 import { resolve, join, basename } from "path";
 import { existsSync, readdirSync } from "fs";
-import { render } from "ink";
+import { createCliRenderer } from "@opentui/core";
+import { createRoot } from "@opentui/react";
 import React from "react";
 import { App } from "./tui/App.js";
 import { logger, createFileSink } from "./logging/logger.js";
@@ -157,32 +158,28 @@ async function main(): Promise<void> {
   if (options.headless) {
     await runHeadless(options);
   } else {
-    runTui(options);
+    await runTui(options);
   }
 }
 
 // ── TUI Mode ────────────────────────────────────────────────────
 
-function runTui(options: CLIOptions): void {
+async function runTui(options: CLIOptions): Promise<void> {
   // Remove default console sink — TUI will handle all rendering
   logger.clearSinks();
 
-  const { waitUntilExit } = render(
+  const renderer = await createCliRenderer({
+    exitOnCtrlC: false,
+  });
+
+  createRoot(renderer).render(
     React.createElement(App, {
       workflowPaths: options.workflowPaths,
       logFile: options.logFile,
       debug: options.debug,
+      renderer,
     })
   );
-
-  const handleSignal = () => {
-    setTimeout(() => process.exit(0), 5000);
-  };
-
-  process.on("SIGTERM", handleSignal);
-  process.on("SIGINT", handleSignal);
-
-  waitUntilExit().then(() => process.exit(0));
 }
 
 // ── Dry Run Mode ────────────────────────────────────────────────

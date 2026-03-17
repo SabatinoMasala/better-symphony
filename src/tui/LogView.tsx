@@ -1,19 +1,18 @@
-import { Box, Text } from "ink";
 import type { LogLine } from "./types.js";
 
 const SOURCE_COLORS = [
-  "cyan",
-  "green",
-  "yellow",
-  "magenta",
-  "blue",
-  "greenBright",
-  "cyanBright",
-  "magentaBright",
+  "#00CCCC",
+  "#00CC00",
+  "#CCCC00",
+  "#CC00CC",
+  "#5555FF",
+  "#55FF55",
+  "#55FFFF",
+  "#FF55FF",
 ] as const;
 
 const colorMap = new Map<string, string>();
-colorMap.set("orchestrator", "gray");
+colorMap.set("orchestrator", "#888888");
 let colorIndex = 0;
 
 function getSourceColor(source: string): string {
@@ -52,20 +51,12 @@ export function LogView({
 
   const visibleLines = lines.slice(startIdx, endIdx);
 
-  const padCount = logHeight - visibleLines.length;
-
   return (
-    <Box flexDirection="column" flexGrow={1} height={logHeight} overflow="hidden">
+    <box flexDirection="column" height={logHeight + 2} overflow="hidden" border borderStyle="rounded" borderColor="#444444" paddingX={1}>
       {visibleLines.map((line, i) => (
         <LogLineRow key={startIdx + i} line={line} showSource={showSource} />
       ))}
-      {padCount > 0 &&
-        Array.from({ length: padCount }, (_, i) => (
-          <Box key={`pad-${i}`} height={1}>
-            <Text> </Text>
-          </Box>
-        ))}
-    </Box>
+    </box>
   );
 }
 
@@ -80,25 +71,25 @@ function LogLineRow({
 }) {
   const msgColor =
     line.type === "error"
-      ? "red"
+      ? "#FF4444"
       : line.type === "info"
-        ? "cyan"
+        ? "#00CCCC"
         : line.type === "comment"
-          ? "gray"
-          : "white";
+          ? "#888888"
+          : "#CCCCCC";
 
   const sourceLabel = `[${line.source}]`.padEnd(SOURCE_WIDTH).slice(0, SOURCE_WIDTH);
 
   return (
-    <Box height={1} overflow="hidden">
-      {showSource && (
-        <Text bold color={getSourceColor(line.source)} wrap="truncate">
-          {sourceLabel}{" "}
-        </Text>
-      )}
-      <Text color={msgColor} wrap="truncate">
-        {line.message}
-      </Text>
-    </Box>
+    <box height={1} overflow="hidden">
+      <text>
+        {showSource && (
+          <span fg={getSourceColor(line.source)}>
+            <strong>{sourceLabel} </strong>
+          </span>
+        )}
+        <span fg={msgColor}>{line.message}</span>
+      </text>
+    </box>
   );
 }
