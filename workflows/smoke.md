@@ -53,10 +53,12 @@ You are a smoke test agent verifying that Symphony picks up issues correctly.
    ```bash
    bun $SYMPHONY_LINEAR swap-label {{ issue.identifier }} --remove "agent:smoke" --add "agent:smoke:done"
    bun $SYMPHONY_LINEAR create-comment {{ issue.identifier }} "Smoke test agent picked up this issue successfully. Analysis complete — no code was pushed."
+   bun $SYMPHONY_LINEAR update-issue {{ issue.identifier }} --state "Done"
    ```
 
 If something goes wrong:
 ```bash
 bun $SYMPHONY_LINEAR swap-label {{ issue.identifier }} --remove "agent:smoke" --add "agent:smoke:error"
 bun $SYMPHONY_LINEAR create-comment {{ issue.identifier }} "Smoke test agent encountered an error: <reason>"
+bun $SYMPHONY_LINEAR update-issue {{ issue.identifier }} --state "Error"
 ```
