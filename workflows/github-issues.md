@@ -28,11 +28,10 @@ hooks:
     git clean -fd
 
 agent:
-  binary: claude                      # Use Claude Code CLI
-  max_concurrent_agents: 2            # Process up to 2 issues in parallel
-  max_turns: 20                       # Limit agent turns
-  turn_timeout_ms: 3600000            # 1 hour timeout per turn
-  stall_timeout_ms: 300000            # 5 minute stall detection
+  binary: claude
+  max_concurrent_agents: 2
+  yolobox: true
+  yolobox_arguments: ["--claude-config"]
 
 ---
 

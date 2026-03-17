@@ -18,11 +18,9 @@ hooks:
         git merge origin/master --no-edit || true
 
 agent:
-    mode: default
     binary: claude
-    max_concurrent_agents: 1
-    turn_timeout_ms: 1800000
-    stall_timeout_ms: 300000
+    yolobox: true
+    yolobox_arguments: ["--claude-config"]
 ---
 
 # PR Review Agent

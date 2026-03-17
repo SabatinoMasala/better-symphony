@@ -29,11 +29,10 @@ hooks:
         git checkout -B {{ issue.branch_name }}
 
 agent:
-    mode: default
     binary: claude
+    yolobox: true
+    yolobox_arguments: ["--claude-config"]
     max_concurrent_agents: 2
-    turn_timeout_ms: 3600000
-    stall_timeout_ms: 300000
 ---
 
 # Dev Agent

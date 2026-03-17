@@ -32,8 +32,8 @@ agent:
   mode: ralph_loop
   binary: claude
   max_concurrent_agents: 1
-  turn_timeout_ms: 3600000
-  stall_timeout_ms: 600000
+  yolobox: true
+  yolobox_arguments: ["--claude-config"]
 ---
 
 # Ralph Loop - Subtask {{ subtask_index }}/{{ total_subtasks }}
