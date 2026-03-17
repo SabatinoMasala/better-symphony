@@ -35,6 +35,17 @@ symphony -w workflows/prd.md workflows/dev.md workflows/ralph.md
 bun run ~/path/to/better-symphony/src/cli.ts -w workflows/dev.md
 ```
 
+### CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `-w <files>` | Run specific workflow file(s) |
+| `--headless` | Run without the TUI |
+| `--web` | Start web dashboard (implies `--headless`) |
+| `--web-port <port>` | Web dashboard port (default: `3000`) |
+| `--web-host <host>` | Web dashboard bind address (default: `0.0.0.0`) |
+| `--dry-run` | Preview rendered prompts without launching agents |
+
 ### Project structure
 
 ```
