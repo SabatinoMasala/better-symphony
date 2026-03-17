@@ -2,7 +2,7 @@
 tracker:
    kind: linear
    api_key: $LINEAR_API_KEY
-   project_slug: my-slug
+   project_slug: better-symphony-04de8977cc95
    active_states:
       - Todo
       - In Progress
