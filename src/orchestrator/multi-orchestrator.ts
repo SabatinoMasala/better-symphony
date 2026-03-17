@@ -247,13 +247,16 @@ export class MultiOrchestrator {
         total_tokens: snapshots.reduce((sum, s) => sum + s.token_totals.total_tokens, 0),
         seconds_running: snapshots.reduce((sum, s) => sum + s.token_totals.seconds_running, 0),
       },
-      rate_limits: this.linearClient?.getRateLimitState()
-        ? {
-            requests_limit: this.linearClient.getRateLimitState().requestsLimit,
-            requests_remaining: this.linearClient.getRateLimitState().requestsRemaining,
-            requests_reset: this.linearClient.getRateLimitState().requestsReset,
-          }
-        : snapshots[0].rate_limits,
+      rate_limits: (() => {
+        const rl = this.linearClient?.getRateLimitState();
+        return rl
+          ? {
+              requests_limit: rl.requestsLimit,
+              requests_remaining: rl.requestsRemaining,
+              requests_reset: rl.requestsReset,
+            }
+          : snapshots[0].rate_limits;
+      })(),
     };
   }
 
