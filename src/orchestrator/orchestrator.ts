@@ -620,40 +620,50 @@ export class Orchestrator {
         this.writePromptDebug(workspace.path, issue.identifier, prompt);
 
         runAttempt.status = "LaunchingAgentProcess";
-        await this.runAgentOnce(issue, workspace.path, prompt, runAttempt.attempt, abortController, config);
-
-        runAttempt.status = "Succeeded";
-        logger.info(`Worker completed for ${issue.identifier}`, {
-          issue_id: issue.id,
-          issue_identifier: issue.identifier,
-        });
-
-        // Schedule continuation retry
-        this.queueContinuationRetry(issue);
-      }
-    } catch (err) {
-      const errorMsg = (err as Error).message;
-      const isAbort = err instanceof AgentError && err.errorClass === "turn_cancelled";
-
-      // If aborted, check if the issue was actually completed (race with reconciliation)
-      if (isAbort && this.linearClient) {
+        let agentError: string | null = null;
         try {
-          const freshIssue = await this.getIssue(issue.identifier);
-          if (freshIssue && config.tracker.terminal_states.some(
-            (s) => s.trim().toLowerCase() === freshIssue.state.trim().toLowerCase()
-          )) {
-            runAttempt.status = "Succeeded";
-            logger.info(`Worker aborted for ${issue.identifier} but issue is ${freshIssue.state} — treating as success`, {
-              issue_id: issue.id,
-              issue_identifier: issue.identifier,
-              state: freshIssue.state,
-            });
-            return;
-          }
-        } catch (checkErr) {
-          logger.warn(`Failed to verify issue state after abort: ${(checkErr as Error).message}`);
+          await this.runAgentOnce(issue, workspace.path, prompt, runAttempt.attempt, abortController, config);
+        } catch (err) {
+          agentError = (err as Error).message;
+        }
+
+        // Agent exited — check the issue's current state to determine outcome
+        const freshIssue = await this.getIssue(issue.identifier);
+        const freshState = freshIssue?.state?.trim().toLowerCase();
+        const isTerminal = freshState && config.tracker.terminal_states.some(
+          (s) => s.trim().toLowerCase() === freshState
+        );
+        const isError = freshState && config.tracker.error_states.some(
+          (s) => s.trim().toLowerCase() === freshState
+        );
+
+        if (isTerminal) {
+          runAttempt.status = "Succeeded";
+          logger.info(`Worker done for ${issue.identifier} (issue is ${freshIssue!.state})`, {
+            issue_id: issue.id,
+            issue_identifier: issue.identifier,
+            state: freshIssue!.state,
+          });
+        } else {
+          runAttempt.status = "Failed";
+          runAttempt.error = isError
+            ? `Agent set issue to error state (${freshIssue!.state})`
+            : agentError ?? "Agent exited but issue not in terminal state";
+          logger.error(`Worker failed for ${issue.identifier}: issue is ${freshIssue?.state ?? "unknown"}`, {
+            issue_id: issue.id,
+            issue_identifier: issue.identifier,
+            state: freshIssue?.state,
+            is_error_state: !!isError,
+            agent_error: agentError,
+          });
+
+          // Queue retry with backoff
+          this.queueRetry(issue, (runAttempt.attempt ?? 0) + 1, runAttempt.error);
         }
       }
+    } catch (err) {
+      // Errors from workspace creation, hooks, or state checking — not agent execution
+      const errorMsg = (err as Error).message;
 
       runAttempt.status = "Failed";
       runAttempt.error = errorMsg;

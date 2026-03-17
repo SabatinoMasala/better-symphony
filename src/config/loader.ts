@@ -25,6 +25,7 @@ const liquid = new Liquid({ strictVariables: true, strictFilters: true });
 
 const DEFAULT_ACTIVE_STATES = ["Todo", "In Progress"];
 const DEFAULT_TERMINAL_STATES = ["Closed", "Cancelled", "Canceled", "Duplicate", "Done"];
+const DEFAULT_ERROR_STATES = ["Error"];
 const DEFAULT_POLL_INTERVAL_MS = 30000;
 const DEFAULT_HOOK_TIMEOUT_MS = 60000;
 const DEFAULT_MAX_CONCURRENT_AGENTS = 10;
@@ -178,10 +179,11 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
         trackerKind === "github-pr" ? ["Open"] : 
         trackerKind === "github-issues" ? ["open"] : 
         DEFAULT_ACTIVE_STATES),
-      terminal_states: parseStateList(cfg.tracker?.terminal_states, 
-        trackerKind === "github-pr" ? ["Closed"] : 
-        trackerKind === "github-issues" ? ["closed"] : 
+      terminal_states: parseStateList(cfg.tracker?.terminal_states,
+        trackerKind === "github-pr" ? ["Closed"] :
+        trackerKind === "github-issues" ? ["closed"] :
         DEFAULT_TERMINAL_STATES),
+      error_states: parseStateList(cfg.tracker?.error_states, DEFAULT_ERROR_STATES),
       // GitHub-specific (empty for linear)
       repo: repo,
       // Shared

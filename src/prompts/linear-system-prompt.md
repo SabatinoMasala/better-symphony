@@ -30,6 +30,12 @@ This extracts all image URLs from the issue description, comments, and Linear at
 
 **When to use:** Always download attachments before starting work on an issue that references visual content (UI mockups, screenshots of bugs, design specs, diagrams). The downloaded files can then be read directly to understand the visual context.
 
+### Error Handling
+If you encounter an unrecoverable error (e.g. missing dependencies, broken build that you cannot fix, unclear requirements), set the issue state to "Error" so that the orchestrator can retry later:
+```
+bun $SYMPHONY_LINEAR update-issue <IDENTIFIER> --state "Error"
+```
+
 ### Notes
 - `<IDENTIFIER>` is the issue identifier (e.g. SYM-123) or UUID
 - Priority values: 1=urgent, 2=high, 3=medium, 4=low

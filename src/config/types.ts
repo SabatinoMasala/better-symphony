@@ -76,6 +76,7 @@ export interface TrackerConfig {
   project_slug?: string;
   active_states?: string[] | string;
   terminal_states?: string[] | string;
+  error_states?: string[] | string;
   // GitHub-specific
   repo?: string;
   // Shared
@@ -142,6 +143,7 @@ export interface ServiceConfig {
     project_slug: string;
     active_states: string[];
     terminal_states: string[];
+    error_states: string[];
     // GitHub-specific
     repo: string;
     // Shared

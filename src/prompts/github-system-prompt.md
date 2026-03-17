@@ -21,6 +21,12 @@ gh issue reopen <NUMBER>
 - The `GH_REPO` environment variable is set automatically by Symphony
 - Use labels to track workflow stages (e.g., `agent:dev` -> `agent:dev:progress` -> `agent:dev:done`)
 
+### Error Handling
+If you encounter an unrecoverable error (e.g. missing dependencies, broken build that you cannot fix, unclear requirements), add an "error" label so that the orchestrator can retry later:
+```
+gh issue edit <NUMBER> --add-label "error"
+```
+
 ### Examples
 
 ```bash
