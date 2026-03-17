@@ -13,7 +13,6 @@ export function StatsCards({ snapshot, onAgentClick }: StatsCardsProps) {
   const [showModal, setShowModal] = useState(false);
 
   const running = snapshot?.running.length ?? 0;
-  const retrying = snapshot?.retrying.length ?? 0;
   const workflows = snapshot?.workflows ?? [];
   const totalSlots = workflows.reduce((s, w) => s + w.max_concurrent_agents, 0);
   const seconds = snapshot?.token_totals.seconds_running ?? 0;
@@ -33,24 +32,13 @@ export function StatsCards({ snapshot, onAgentClick }: StatsCardsProps) {
 
   return (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Running Agents</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-success">{running}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Retrying</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${retrying > 0 ? "text-warning" : "text-muted-foreground"}`}>
-              {retrying}
-            </div>
           </CardContent>
         </Card>
 

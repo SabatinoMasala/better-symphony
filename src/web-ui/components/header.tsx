@@ -6,12 +6,13 @@ import { RefreshCw, Power, RotateCcw } from "lucide-react";
 interface HeaderProps {
   connected: boolean;
   startTime: number;
+  polling: boolean;
   onForcePoll: () => void;
   onRestart: () => void;
   onShutdown: () => void;
 }
 
-export function Header({ connected, startTime, onForcePoll, onRestart, onShutdown }: HeaderProps) {
+export function Header({ connected, startTime, polling, onForcePoll, onRestart, onShutdown }: HeaderProps) {
   const [uptime, setUptime] = useState("0s");
 
   useEffect(() => {
@@ -51,8 +52,8 @@ export function Header({ connected, startTime, onForcePoll, onRestart, onShutdow
           </>
         ) : (
           <>
-            <Button size="sm" variant="outline" onClick={onForcePoll}>
-              <RefreshCw className="h-3.5 w-3.5" />
+            <Button size="sm" variant="outline" onClick={onForcePoll} disabled={polling}>
+              <RefreshCw className={`h-3.5 w-3.5 ${polling ? "animate-spin" : ""}`} />
               Poll Now
             </Button>
             <Button size="sm" variant="outline" onClick={() => setConfirmAction("restart")}>
