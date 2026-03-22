@@ -21,6 +21,7 @@ interface CLIOptions {
   logFile?: string;
   debug: boolean;
   dryRun: boolean;
+  routes: boolean;
   headless: boolean;
   web: boolean;
   webPort: number;
@@ -37,6 +38,7 @@ function parseArgs(): CLIOptions {
     filters: [],
     debug: false,
     dryRun: false,
+    routes: false,
     headless: false,
     web: false,
     webPort: 3000,
@@ -62,6 +64,8 @@ function parseArgs(): CLIOptions {
       options.debug = true;
     } else if (arg === "--dry-run") {
       options.dryRun = true;
+    } else if (arg === "--routes") {
+      options.routes = true;
     } else if (arg === "--headless") {
       options.headless = true;
     } else if (arg === "--web") {
@@ -130,6 +134,7 @@ Options:
   -f, --filter <strings...>  Filter auto-discovered workflows by filename substring
   -l, --log <path>           Log file path (appends JSON lines)
   --dry-run                  Render prompts for matching issues and print them (no agent launched)
+  --routes                   Print workflow routing rules and exit
   --headless                 Run without TUI (plain log output)
   --web                      Start web dashboard (implies --headless)
   --web-port <port>          Web dashboard port (default: 3000)
@@ -148,10 +153,103 @@ Examples:
   symphony --web                                    # Run with web dashboard
   symphony --web --web-port 8080                    # Web dashboard on port 8080
   symphony --dry-run                                # Preview rendered prompts
+  symphony --routes                                 # Print routing rules for all workflows
+  symphony --routes -f dev                          # Print routing rules for dev workflow only
 
 Environment Variables:
   LINEAR_API_KEY                Linear API key (required)
 `);
+}
+
+// ── Routes Mode ─────────────────────────────────────────────────
+
+function printRoutes(options: CLIOptions): void {
+  const { loadWorkflow, buildServiceConfig } = require("./config/loader.js");
+
+  console.log("\nWorkflow Routes");
+  console.log("===============\n");
+
+  // Collect route info for collision detection
+  const routeInfos: Array<{
+    name: string;
+    trackerKind: string;
+    scope: string;
+    requiredLabels: string[];
+    excludedLabels: string[];
+  }> = [];
+
+  for (const workflowPath of options.workflowPaths) {
+    const name = basename(workflowPath).replace(/\.md$/, "");
+    try {
+      const workflow = loadWorkflow(workflowPath);
+      const config = buildServiceConfig(workflow);
+      const t = config.tracker;
+      const scope = t.kind === "linear" ? t.project_slug : t.repo;
+
+      routeInfos.push({
+        name,
+        trackerKind: t.kind,
+        scope,
+        requiredLabels: t.required_labels,
+        excludedLabels: t.excluded_labels,
+      });
+
+      console.log(`${name} (${t.kind})`);
+      if (t.kind === "linear") {
+        console.log(`  Project:          ${t.project_slug || "(none)"}`);
+      } else {
+        console.log(`  Repo:             ${t.repo || "(none)"}`);
+      }
+      console.log(`  Mode:             ${config.agent.mode}`);
+      console.log(`  Active states:    ${t.active_states.join(", ")}`);
+      console.log(`  Required labels:  ${t.required_labels.length > 0 ? t.required_labels.join(", ") : "(none)"}`);
+      console.log(`  Excluded labels:  ${t.excluded_labels.length > 0 ? t.excluded_labels.join(", ") : "(none)"}`);
+      console.log(`  Max concurrency:  ${config.agent.max_concurrent_agents}`);
+      console.log();
+    } catch (err) {
+      console.log(`${name}`);
+      console.log(`  ⚠ Error loading: ${(err as Error).message}\n`);
+    }
+  }
+
+  // Collision detection
+  const warnings: string[] = [];
+
+  // Check for label overlaps (scoped by tracker kind + project/repo)
+  const labelMap = new Map<string, string[]>();
+  for (const route of routeInfos) {
+    for (const label of route.requiredLabels) {
+      const key = `${route.trackerKind}|${route.scope}|${label}`;
+      if (!labelMap.has(key)) labelMap.set(key, []);
+      labelMap.get(key)!.push(route.name);
+    }
+  }
+  for (const [key, names] of labelMap) {
+    if (names.length > 1) {
+      const label = key.split("|")[2];
+      warnings.push(
+        `⚠ Label "${label}" is required by multiple workflows: ${names.join(", ")}\n  Both workflows will pick up the same issues — this is likely unintentional.`
+      );
+    }
+  }
+
+  // Check for workflows with no label filters
+  for (const route of routeInfos) {
+    if (route.requiredLabels.length === 0 && route.excludedLabels.length === 0) {
+      warnings.push(
+        `⚠ Workflow "${route.name}" has no label filters — it will match all issues in active states.`
+      );
+    }
+  }
+
+  if (warnings.length > 0) {
+    console.log("Warnings");
+    console.log("========\n");
+    for (const w of warnings) {
+      console.log(w);
+      console.log();
+    }
+  }
 }
 
 // ── Main ────────────────────────────────────────────────────────
@@ -165,6 +263,12 @@ async function main(): Promise<void> {
       console.error(`Workflow file not found: ${path}`);
       process.exit(1);
     }
+  }
+
+  // Routes mode: print routing summary and exit
+  if (options.routes) {
+    printRoutes(options);
+    return;
   }
 
   // Dry run mode always runs headless (only supports single workflow)
