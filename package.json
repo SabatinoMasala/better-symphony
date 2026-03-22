@@ -1,12 +1,36 @@
 {
   "name": "better-symphony",
   "version": "1.0.0",
-  "description": "Symphony - Coding agent orchestrator",
-  "private": true,
+  "description": "Better Symphony - Headless coding agent orchestrator with configurable workflows",
   "type": "module",
-  "bin": {
-    "symphony": "./src/cli.ts"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SabatinoMasala/better-symphony.git"
   },
+  "keywords": [
+    "claude",
+    "ai",
+    "agent",
+    "orchestrator",
+    "coding-agent",
+    "linear",
+    "github"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "better-symphony": "./src/cli.ts"
+  },
+  "files": [
+    "src",
+    "dist/web",
+    "workflows",
+    "README.md",
+    "LICENSE",
+    "CLAUDE.md"
+  ],
   "scripts": {
     "start": "bun run src/cli.ts",
     "dev": "bun run --watch src/cli.ts",
@@ -15,8 +39,8 @@
     "build:web": "bunx @tailwindcss/cli -i src/web-ui/globals.css -o dist/web/app.css --minify && bun build src/web-ui/main.tsx --outdir dist/web --minify && cp src/web-ui/index.html dist/web/index.html"
   },
   "dependencies": {
-    "@opentui/core": "latest",
-    "@opentui/react": "latest",
+    "@opentui/core": "^0.1.88",
+    "@opentui/react": "^0.1.88",
     "chokidar": "^4.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

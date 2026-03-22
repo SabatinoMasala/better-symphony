@@ -5,8 +5,8 @@
     "": {
       "name": "better-symphony",
       "dependencies": {
-        "@opentui/core": "latest",
-        "@opentui/react": "latest",
+        "@opentui/core": "^0.1.88",
+        "@opentui/react": "^0.1.88",
         "chokidar": "^4.0.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",

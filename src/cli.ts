@@ -11,6 +11,7 @@ import { createRoot } from "@opentui/react";
 import React from "react";
 import { App } from "./tui/App.js";
 import { logger, createFileSink } from "./logging/logger.js";
+import pkg from "../package.json";
 
 // ── CLI Parsing ─────────────────────────────────────────────────
 
@@ -73,7 +74,7 @@ function parseArgs(): CLIOptions {
       printHelp();
       process.exit(0);
     } else if (arg === "--version" || arg === "-v") {
-      console.log("Symphony v1.0.0");
+      console.log(`Symphony v${pkg.version}`);
       process.exit(0);
     } else if (!arg.startsWith("-")) {
       options.workflowPaths.push(resolve(callerCwd, arg));
