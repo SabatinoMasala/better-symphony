@@ -5,18 +5,16 @@ A headless coding agent orchestrator that polls issue trackers (Linear, GitHub I
 ## Installation
 
 ```bash
-# Clone and install Symphony
-git clone https://github.com/AugmentCo/better-symphony.git
-cd better-symphony
-bun install
+# Run directly with bunx (no install needed)
+bunx better-symphony
 
-# Optional: create a global alias so you can run `symphony` from anywhere
-alias symphony="bun run $(pwd)/src/cli.ts"
+# Or install globally
+bun install -g better-symphony
 ```
 
 ## Quick Start
 
-> **Important:** Symphony is run from **your project's directory**, not from inside the `better-symphony` repo. Your project should have a `workflows/` folder containing your workflow `.md` files. Symphony auto-detects `workflows/*.md` in the current working directory.
+> **Important:** Symphony is run from **your project's directory**. Your project should have a `workflows/` folder containing your workflow `.md` files. Symphony auto-detects `workflows/*.md` in the current working directory.
 
 ```bash
 cd ~/your-project          # Your project with a workflows/ directory
@@ -25,14 +23,11 @@ cd ~/your-project          # Your project with a workflows/ directory
 export LINEAR_API_KEY=lin_api_xxxxx
 
 # Run all workflows in workflows/
-symphony
+bunx better-symphony
 
 # Or run specific workflow(s)
-symphony -w workflows/dev.md
-symphony -w workflows/prd.md workflows/dev.md workflows/ralph.md
-
-# If you didn't set up the alias, use the full path:
-bun run ~/path/to/better-symphony/src/cli.ts -w workflows/dev.md
+bunx better-symphony -w workflows/dev.md
+bunx better-symphony -w workflows/prd.md workflows/dev.md workflows/ralph.md
 ```
 
 ### CLI Flags
