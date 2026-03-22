@@ -684,6 +684,12 @@ export class Orchestrator {
       // Remove from running
       state.removeRunning(orchState, issue.id);
 
+      // Release claim if no retry is pending, so the issue can be
+      // re-dispatched if it transitions back to an active state.
+      if (!state.getRetry(orchState, issue.id)) {
+        state.releaseClaim(orchState, issue.id);
+      }
+
       // Update running entry session to orchestrator totals
       const entry = orchState.running.get(issue.id);
       if (entry?.session) {
