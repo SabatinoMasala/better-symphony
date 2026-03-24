@@ -113,8 +113,13 @@ function checkEligibility(
     }
   }
 
-  // Required labels check
+  // Symphony error label check
   const issueLabels = new Set(issue.labels.map((l) => l.toLowerCase()));
+  if (issueLabels.has("symphony:error")) {
+    return { eligible: false, reason: "symphony:error label present" };
+  }
+
+  // Required labels check
   if (config.tracker.required_labels.length > 0) {
     for (const requiredLabel of config.tracker.required_labels) {
       if (!issueLabels.has(requiredLabel.toLowerCase())) {

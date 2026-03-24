@@ -170,6 +170,18 @@ export class Orchestrator {
     return this.linearClient.upsertComment(issueId, body, commentId ?? null);
   }
 
+  private async addLabel(issueId: string, label: string, color?: string): Promise<void> {
+    if (this.isGitHubTracker() && this.tracker) {
+      return this.tracker.addLabel(issueId, label);
+    }
+    if (!this.linearClient) throw new Error("Linear client not initialized");
+    const issue = await this.linearClient.getIssue(issueId);
+    if (!issue) return;
+    const teamId = (issue as any).team?.id;
+    if (!teamId) return;
+    await this.linearClient.addLabel(issueId, label, teamId, color);
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────
 
   async start(): Promise<void> {
@@ -658,7 +670,7 @@ export class Orchestrator {
           });
 
           // Queue retry with backoff
-          this.queueRetry(issue, (runAttempt.attempt ?? 0) + 1, runAttempt.error);
+          await this.queueRetry(issue, (runAttempt.attempt ?? 0) + 1, runAttempt.error);
         }
       }
     } catch (err) {
@@ -674,7 +686,7 @@ export class Orchestrator {
       });
 
       // Queue retry with backoff
-      this.queueRetry(issue, (runAttempt.attempt ?? 0) + 1, errorMsg);
+      await this.queueRetry(issue, (runAttempt.attempt ?? 0) + 1, errorMsg);
     } finally {
       // Run after_run hook
       if (runAttempt.workspace_path) {
@@ -1096,7 +1108,7 @@ export class Orchestrator {
 
   // ── Retry Queue ───────────────────────────────────────────────
 
-  private queueRetry(issue: Issue, attempt: number, error: string | null): void {
+  private async queueRetry(issue: Issue, attempt: number, error: string | null): Promise<void> {
     if (!this.config || !this.orchState) return;
 
     const maxRetries = this.config.agent.max_retries;
@@ -1106,6 +1118,12 @@ export class Orchestrator {
         issue_identifier: issue.identifier,
         attempt,
       });
+      // Add symphony:error label to prevent infinite re-dispatch
+      try {
+        await this.addLabel(issue.id, "symphony:error", "#e5484d");
+      } catch (err) {
+        logger.warn(`Failed to add symphony:error label to ${issue.identifier}: ${(err as Error).message}`);
+      }
       state.releaseClaim(this.orchState, issue.id);
       return;
     }
@@ -1185,7 +1203,7 @@ export class Orchestrator {
       // Check if we have slots
       if (scheduler.getAvailableSlots(this.orchState, this.config) <= 0) {
         // Requeue
-        this.queueRetry(issue, retryEntry.attempt, "no available orchestrator slots");
+        await this.queueRetry(issue, retryEntry.attempt, "no available orchestrator slots");
         return;
       }
 
@@ -1197,7 +1215,7 @@ export class Orchestrator {
         issue_id: issueId,
       });
       // Requeue with backoff
-      this.queueRetry(
+      await this.queueRetry(
         { id: issueId, identifier: retryEntry.identifier } as Issue,
         retryEntry.attempt + 1,
         (err as Error).message
@@ -1248,7 +1266,7 @@ export class Orchestrator {
           entry.issue,
           (entry.attempt.attempt ?? 0) + 1,
           "stall timeout"
-        );
+        ).catch(() => {});
       }
     }
   }
