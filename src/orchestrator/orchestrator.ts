@@ -700,6 +700,11 @@ export class Orchestrator {
       // re-dispatched if it transitions back to an active state.
       if (!state.getRetry(orchState, issue.id)) {
         state.releaseClaim(orchState, issue.id);
+
+        // Clean up workspace when issue reached terminal state (no more work to do)
+        if (runAttempt.status === "Succeeded" && runAttempt.workspace_path) {
+          await workspaceManager.removeWorkspace(issue.identifier);
+        }
       }
 
       // Update running entry session to orchestrator totals
@@ -1125,6 +1130,10 @@ export class Orchestrator {
         logger.warn(`Failed to add symphony:error label to ${issue.identifier}: ${(err as Error).message}`);
       }
       state.releaseClaim(this.orchState, issue.id);
+      // Clean up workspace since no more retries will happen
+      if (this.workspaceManager) {
+        await this.workspaceManager.removeWorkspace(issue.identifier);
+      }
       return;
     }
 
