@@ -463,12 +463,12 @@ export class LinearClient {
   /**
    * Add a label to an issue (by name, creates if needed)
    */
-  async addLabel(issueId: string, labelName: string, teamId: string): Promise<void> {
+  async addLabel(issueId: string, labelName: string, teamId: string, color?: string): Promise<void> {
     const currentLabels = await this.getIssueLabels(issueId);
     const alreadyHas = currentLabels.some(l => l.name.toLowerCase() === labelName.toLowerCase());
     if (alreadyHas) return;
 
-    const labelId = await this.ensureLabel(teamId, labelName);
+    const labelId = await this.ensureLabel(teamId, labelName, color);
     const newIds = [...currentLabels.map(l => l.id), labelId];
     await this.setIssueLabels(issueId, newIds);
   }
@@ -488,7 +488,7 @@ export class LinearClient {
   /**
    * Ensure a label exists on a team, returning its ID
    */
-  async ensureLabel(teamId: string, labelName: string): Promise<string> {
+  async ensureLabel(teamId: string, labelName: string, color?: string): Promise<string> {
     const response = await this.graphql<{ team: { labels: { nodes: Array<{ id: string; name: string }> } } }>(Q.GET_TEAM_LABELS, { teamId });
     const labels = response.data?.team?.labels?.nodes ?? [];
 
@@ -500,7 +500,7 @@ export class LinearClient {
 
     // Create it
     const createResponse = await this.graphql<{ issueLabelCreate: { success: boolean; issueLabel: { id: string } } }>(Q.CREATE_LABEL, {
-      input: { teamId, name: labelName, color: "#888888" },
+      input: { teamId, name: labelName, color: color ?? "#888888" },
     });
 
     if (!createResponse.data?.issueLabelCreate?.success) {
