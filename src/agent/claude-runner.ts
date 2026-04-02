@@ -44,6 +44,17 @@ function stripAnsi(str: string): string {
   return str.replace(ANSI_RE, "").replace(/\r/g, "");
 }
 
+// Filter out yolobox ASCII art banner from stderr, replace with compact tag
+const YOLOBOX_BANNER_RE = /[ \t]*[█╗╔╚╝═║░▒▓]+[█╗╔╚╝═║░▒▓ \t]*\n?/g;
+function filterYoloboxBanner(stderr: string): string {
+  const filtered = stderr.replace(YOLOBOX_BANNER_RE, "").trim();
+  if (filtered.length < stderr.trim().length) {
+    // Banner was present — prepend a compact marker
+    return filtered ? `[yolobox] ${filtered}` : "[yolobox]";
+  }
+  return stderr;
+}
+
 /** Safely extract text from an array of content blocks (handles nested/object values) */
 function extractBlockText(blocks: any[]): string {
   return blocks
@@ -77,6 +88,7 @@ export class ClaudeRunner {
   private options: ClaudeRunnerOptions;
   private proc: ReturnType<typeof Bun.spawn> | null = null;
   private session: LiveSession | null = null;
+  private lastAssistantMessage: string | null = null;
   constructor(options: ClaudeRunnerOptions) {
     this.options = options;
     // Initialize transcript file with header
@@ -259,9 +271,12 @@ export class ClaudeRunner {
     }
 
     // Read stderr
-    const stderrText = this.proc.stderr && typeof this.proc.stderr !== "number"
+    const rawStderr = this.proc.stderr && typeof this.proc.stderr !== "number"
       ? await new Response(this.proc.stderr).text()
       : "";
+
+    // Filter out noisy yolobox ASCII banner from stderr
+    const stderrText = filterYoloboxBanner(rawStderr);
 
     const exitCode = await this.proc.exited;
 
@@ -281,8 +296,10 @@ export class ClaudeRunner {
     }
 
     if (exitCode !== 0) {
+      // Prefer last assistant message (e.g. "Not logged in") over raw stderr for error context
+      const errorContext = this.lastAssistantMessage || stderrText.slice(0, 500);
       this.emitEvent("turn_failed", { exitCode, stderr: stderrText.slice(0, 500) });
-      throw new AgentError("turn_failed", `Claude exited with code ${exitCode}: ${stderrText.slice(0, 200)}`);
+      throw new AgentError("turn_failed", `Claude exited with code ${exitCode}: ${errorContext.slice(0, 200)}`);
     }
 
     this.emitEvent("turn_completed", { exitCode });
@@ -385,6 +402,7 @@ export class ClaudeRunner {
     for (const block of content) {
       if (block.type === "text" && block.text?.trim()) {
         const text = stripAnsi(block.text.trim());
+        this.lastAssistantMessage = text;
         this.emitEvent("assistant_message", { text: text.slice(0, 500) });
 
         logger.debug(text.slice(0, 200), { issue_identifier: issueId });
