@@ -21,9 +21,9 @@ import { LinearClient } from "./tracker/client.js";
 const LINEAR_ENDPOINT = "https://api.linear.app/graphql";
 
 function getApiKey(): string {
-  const key = process.env.LINEAR_API_KEY;
+  const key = process.env.SYMPHONY_LINEAR_API_KEY;
   if (!key) {
-    console.error("Error: LINEAR_API_KEY environment variable is required");
+    console.error("Error: SYMPHONY_LINEAR_API_KEY environment variable is required");
     process.exit(1);
   }
   return key;
@@ -154,7 +154,7 @@ Commands:
   download-attachments <IDENTIFIER> [--output dir] Download all attachments from issue
 
 Environment:
-  LINEAR_API_KEY    Required. Linear API key.
+  SYMPHONY_LINEAR_API_KEY    Required. Linear API key (set automatically by Symphony).
 
 Notes:
   - <IDENTIFIER> can be issue identifier (SYM-123) or UUID

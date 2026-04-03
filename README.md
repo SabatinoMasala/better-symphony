@@ -250,7 +250,7 @@ This produces: `yolobox claude --claude-config -- -p "..." --output-format strea
 
 When yolobox is enabled, Symphony automatically:
 - **Mounts** the Symphony source directory into the container (so `$SYMPHONY_LINEAR` resolves correctly)
-- **Forwards** environment variables via `--env`: `SYMPHONY_LINEAR`, `SYMPHONY_WORKSPACE`, `SYMPHONY_ISSUE_ID`, `SYMPHONY_ISSUE_IDENTIFIER`, and `LINEAR_API_KEY`
+- **Forwards** environment variables via `--env`: `SYMPHONY_LINEAR`, `SYMPHONY_WORKSPACE`, `SYMPHONY_ISSUE_ID`, `SYMPHONY_ISSUE_IDENTIFIER`, and `SYMPHONY_LINEAR_API_KEY`
 
 Without `yolobox: true`, the harness binary is invoked directly.
 

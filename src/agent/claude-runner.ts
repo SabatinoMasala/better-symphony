@@ -174,8 +174,8 @@ export class ClaudeRunner {
         SYMPHONY_ISSUE_ID: issue.id,
         SYMPHONY_ISSUE_IDENTIFIER: issue.identifier,
       };
-      if (process.env.LINEAR_API_KEY) {
-        envVars.LINEAR_API_KEY = process.env.LINEAR_API_KEY;
+      if (config.tracker.api_key) {
+        envVars.SYMPHONY_LINEAR_API_KEY = config.tracker.api_key;
       }
       for (const [key, value] of Object.entries(envVars)) {
         yoloboxExtraArgs.push("--env", `${key}=${value}`);
@@ -208,6 +208,7 @@ export class ClaudeRunner {
         SYMPHONY_ISSUE_IDENTIFIER: issue.identifier,
         // Resolve path to linear-cli so agents can call it from any cwd
         SYMPHONY_LINEAR: new URL("../linear-cli.ts", import.meta.url).pathname,
+        ...(config.tracker.api_key ? { SYMPHONY_LINEAR_API_KEY: config.tracker.api_key } : {}),
       },
     });
 
