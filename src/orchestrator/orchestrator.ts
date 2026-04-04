@@ -84,7 +84,7 @@ export class Orchestrator {
     if (this.profileName) {
       return loadProfileWorkflow(this.workflowPath, this.profileName);
     }
-    return this.loadCurrentWorkflow();
+    return loadWorkflow(this.workflowPath);
   }
 
   // ── Tracker Helpers ───────────────────────────────────────────

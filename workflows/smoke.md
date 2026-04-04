@@ -1,8 +1,20 @@
 ---
+profiles:
+    default:
+        api_key: $LINEAR_API_KEY
+        project_slug: better-symphony-04de8977cc95
+    alt:
+        api_key: $LINEAR_API_KEY_ALT
+        project_slug: better-symphony-alt-69ac729a1b50
+
+matrix:
+    - default
+    - alt
+
 tracker:
     kind: linear
-    api_key: $LINEAR_API_KEY
-    project_slug: better-symphony-04de8977cc95
+    api_key: ${profile.api_key}
+    project_slug: ${profile.project_slug}
     active_states:
         - Todo
         - In Progress

@@ -35,7 +35,9 @@ bunx better-symphony -w workflows/prd.md workflows/dev.md workflows/ralph.md
 | Flag | Description |
 |------|-------------|
 | `-w <files>` | Run specific workflow file(s) |
+| `-f <strings>` | Filter workflows by name substring (matches virtual names for matrix workflows) |
 | `--headless` | Run without the TUI |
+| `--routes` | Print workflow routing rules and exit |
 | `--web` | Start web dashboard (implies `--headless`) |
 | `--web-port <port>` | Web dashboard port (default: `3000`) |
 | `--web-host <host>` | Web dashboard bind address (default: `0.0.0.0`) |
@@ -234,6 +236,63 @@ When done, use `gh pr edit {{ issue.number }} --add-label "review:complete"` to 
 ```
 
 The GitHub PR tracker exposes additional template variables: `issue.branch_name`, `issue.base_branch`, `issue.author`, `issue.files_changed`, and `issue.comments`.
+
+### Matrix Workflows
+
+A single workflow file can expand into multiple virtual workflows using `profiles` and `matrix`. This is useful when you want the same agent logic to run against different projects, API keys, or repos.
+
+```yaml
+---
+profiles:
+    default:
+        api_key: $LINEAR_API_KEY
+        project_slug: better-symphony-04de8977cc95
+        repo: SabatinoMasala/better-symphony
+    alt:
+        api_key: $LINEAR_API_KEY_ALT
+        project_slug: better-symphony-alt-69ac729a1b50
+        repo: SabatinoMasala/other-repo
+
+matrix:
+    - default
+    - alt
+
+tracker:
+    kind: linear
+    api_key: ${profile.api_key}
+    project_slug: ${profile.project_slug}
+    active_states: [Todo, In Progress]
+    terminal_states: [Done, Cancelled]
+    required_labels: [agent:dev]
+    excluded_labels: [agent:dev:done, agent:dev:error]
+
+hooks:
+    after_create: |
+        git clone git@github.com:${profile.repo}.git .
+    before_run: |
+        git fetch origin main
+        git reset --hard origin/main
+
+agent:
+    max_concurrent_agents: 2
+---
+
+You are working on **{{ issue.identifier }}**: {{ issue.title }}
+```
+
+This expands into two virtual workflows: `dev:default` and `dev:alt`, each with its own API key, project, and repo. Use `${profile.*}` to reference profile values anywhere in the frontmatter or prompt template.
+
+Use `--routes` to verify the expansion:
+
+```bash
+bunx better-symphony --routes
+```
+
+Use `-f` to run a specific profile:
+
+```bash
+bunx better-symphony -f dev:alt
+```
 
 ## Yolobox Support
 
