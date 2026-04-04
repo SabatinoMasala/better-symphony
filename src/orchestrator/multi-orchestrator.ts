@@ -4,20 +4,22 @@
  * to avoid hammering the Linear API with N independent pollers.
  */
 
-import type { ServiceConfig } from "../config/types.js";
+import type { ServiceConfig, ExpandedWorkflow } from "../config/types.js";
 import { loadWorkflow, buildServiceConfig, validateServiceConfig } from "../config/loader.js";
+import { loadProfileWorkflow } from "../config/profiles.js";
 import { LinearClient } from "../tracker/client.js";
 import { logger } from "../logging/logger.js";
 import { Orchestrator } from "./orchestrator.js";
 import type { RuntimeSnapshot } from "./state.js";
 
 export interface MultiOrchestratorOptions {
-  workflowPaths: string[];
+  workflows: ExpandedWorkflow[];
   debug?: boolean;
 }
 
 interface WorkflowEntry {
   path: string;
+  profileName?: string;
   apiKey: string;
   orchestrator: Orchestrator;
 }
@@ -27,11 +29,11 @@ export class MultiOrchestrator {
   private linearClients: Map<string, LinearClient> = new Map();
   private pollTimer: Timer | null = null;
   private running = false;
-  private workflowPaths: string[];
+  private workflows: ExpandedWorkflow[];
   private debug: boolean;
 
   constructor(options: MultiOrchestratorOptions) {
-    this.workflowPaths = options.workflowPaths;
+    this.workflows = options.workflows;
     this.debug = options.debug ?? false;
   }
 
@@ -39,44 +41,47 @@ export class MultiOrchestrator {
 
   async start(): Promise<void> {
     logger.info("Starting multi-workflow orchestrator", {
-      workflows: this.workflowPaths.length,
+      workflows: this.workflows.length,
     });
 
     // Start each orchestrator in managed mode, creating per-key LinearClients
-    for (const path of this.workflowPaths) {
-      const workflow = loadWorkflow(path);
+    for (const wf of this.workflows) {
+      const workflow = wf.profileName
+        ? loadProfileWorkflow(wf.path, wf.profileName)
+        : loadWorkflow(wf.path);
       const config = buildServiceConfig(workflow);
       const validation = validateServiceConfig(config);
 
       if (!validation.valid) {
-        throw new Error(`Workflow validation failed for ${path}: ${validation.errors.join(", ")}`);
+        throw new Error(`Workflow validation failed for ${wf.virtualName}: ${validation.errors.join(", ")}`);
       }
 
       const apiKey = config.tracker.api_key;
       const client = this.getOrCreateClient(config.tracker.endpoint, apiKey);
 
       const orchestrator = new Orchestrator({
-        workflowPath: path,
+        workflowPath: wf.path,
+        profileName: wf.profileName,
         linearClient: client,
         managedPolling: true,
         debug: this.debug,
       });
 
       await orchestrator.start();
-      this.entries.push({ path, apiKey, orchestrator });
+      this.entries.push({ path: wf.path, profileName: wf.profileName, apiKey, orchestrator });
 
-      logger.info(`Loaded workflow: ${path}`);
+      logger.info(`Loaded workflow: ${wf.virtualName}`);
     }
 
     // Log detected API key sources (env var names, not values)
     const keySourceMap = new Map<string, string>();
-    for (const path of this.workflowPaths) {
-      const rawKey = loadWorkflow(path).config.tracker?.api_key;
-      const resolvedKey = this.entries.find((e) => e.path === path)?.apiKey;
-      if (resolvedKey && rawKey?.startsWith("$")) {
-        keySourceMap.set(resolvedKey, rawKey.slice(1));
-      } else if (resolvedKey && !keySourceMap.has(resolvedKey)) {
-        keySourceMap.set(resolvedKey, "LINEAR_API_KEY");
+    for (const entry of this.entries) {
+      const rawWorkflow = loadWorkflow(entry.path);
+      const rawKey = rawWorkflow.config.tracker?.api_key;
+      if (entry.apiKey && rawKey?.startsWith("$")) {
+        keySourceMap.set(entry.apiKey, rawKey.slice(1));
+      } else if (entry.apiKey && !keySourceMap.has(entry.apiKey)) {
+        keySourceMap.set(entry.apiKey, "LINEAR_API_KEY");
       }
     }
     const sources = [...keySourceMap.values()];

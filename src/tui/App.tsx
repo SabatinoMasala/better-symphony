@@ -5,15 +5,16 @@ import { useOrchestrator } from "./useOrchestrator.js";
 import { TabBar } from "./TabBar.js";
 import { LogView } from "./LogView.js";
 import { StatusBar } from "./StatusBar.js";
+import type { ExpandedWorkflow } from "../config/types.js";
 
 interface AppProps {
-  workflowPaths: string[];
+  workflows: ExpandedWorkflow[];
   logFile?: string;
   debug?: boolean;
   renderer: CliRenderer;
 }
 
-export function App({ workflowPaths, logFile, debug, renderer }: AppProps) {
+export function App({ workflows, logFile, debug, renderer }: AppProps) {
   const shutdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { height } = useTerminalDimensions();
 
@@ -27,7 +28,7 @@ export function App({ workflowPaths, logFile, debug, renderer }: AppProps) {
     scrollToBottom,
     shutdown,
     forcePoll,
-  } = useOrchestrator(workflowPaths, logFile, debug);
+  } = useOrchestrator(workflows, logFile, debug);
 
   // Exit once shutdown completes
   useEffect(() => {

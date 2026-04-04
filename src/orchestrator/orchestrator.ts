@@ -22,6 +22,7 @@ import {
   renderPrompt,
   renderSubtaskPrompt,
 } from "../config/loader.js";
+import { loadProfileWorkflow } from "../config/profiles.js";
 import { basename, join } from "path";
 import { mkdirSync, writeFileSync } from "fs";
 import { homedir } from "os";
@@ -39,6 +40,8 @@ import { watch } from "chokidar";
 
 export interface OrchestratorOptions {
   workflowPath: string;
+  /** Profile name for matrix-expanded workflows */
+  profileName?: string;
   dryRun?: boolean;
   /** Injected shared LinearClient (for multi-workflow mode) */
   linearClient?: LinearClient;
@@ -50,6 +53,7 @@ export interface OrchestratorOptions {
 
 export class Orchestrator {
   private workflowPath: string;
+  private profileName: string | undefined;
   private workflow: WorkflowDefinition | null = null;
   private config: ServiceConfig | null = null;
   private orchState: OrchestratorState | null = null;
@@ -65,12 +69,22 @@ export class Orchestrator {
 
   constructor(options: OrchestratorOptions) {
     this.workflowPath = options.workflowPath;
-    this.workflowName = basename(options.workflowPath, ".md");
+    this.profileName = options.profileName;
+    const baseName = basename(options.workflowPath, ".md");
+    this.workflowName = options.profileName ? `${baseName}:${options.profileName}` : baseName;
     this.managedPolling = options.managedPolling ?? false;
     this.debug = options.debug ?? false;
     if (options.linearClient) {
       this.linearClient = options.linearClient;
     }
+  }
+
+  /** Load the workflow definition, handling matrix profiles if applicable */
+  private loadCurrentWorkflow(): WorkflowDefinition {
+    if (this.profileName) {
+      return loadProfileWorkflow(this.workflowPath, this.profileName);
+    }
+    return this.loadCurrentWorkflow();
   }
 
   // ── Tracker Helpers ───────────────────────────────────────────
@@ -188,7 +202,7 @@ export class Orchestrator {
     logger.info("Starting Symphony orchestrator", { workflowPath: this.workflowPath });
 
     // Load and validate workflow
-    this.workflow = loadWorkflow(this.workflowPath);
+    this.workflow = this.loadCurrentWorkflow();
     this.config = buildServiceConfig(this.workflow);
 
     const validation = validateServiceConfig(this.config);
@@ -264,7 +278,7 @@ export class Orchestrator {
   async dryRun(): Promise<void> {
     logger.info("Dry run: loading workflow and fetching issues...");
 
-    this.workflow = loadWorkflow(this.workflowPath);
+    this.workflow = this.loadCurrentWorkflow();
     this.config = buildServiceConfig(this.workflow);
 
     const validation = validateServiceConfig(this.config);
@@ -399,7 +413,7 @@ export class Orchestrator {
 
   private reloadWorkflow(): void {
     try {
-      const newWorkflow = loadWorkflow(this.workflowPath);
+      const newWorkflow = this.loadCurrentWorkflow();
       const newConfig = buildServiceConfig(newWorkflow);
       const validation = validateServiceConfig(newConfig);
 
@@ -1322,7 +1336,7 @@ export class Orchestrator {
   /** Refresh workflow config from file. Returns true if successful. */
   refreshConfig(): boolean {
     try {
-      const freshWorkflow = loadWorkflow(this.workflowPath);
+      const freshWorkflow = this.loadCurrentWorkflow();
       const freshConfig = buildServiceConfig(freshWorkflow);
       const validation = validateServiceConfig(freshConfig);
 

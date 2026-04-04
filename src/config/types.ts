@@ -61,11 +61,25 @@ export interface WorkflowDefinition {
 }
 
 export interface WorkflowConfig {
+  profiles?: Record<string, ProfileConfig>;
+  matrix?: string[];
   tracker?: TrackerConfig;
   polling?: PollingConfig;
   workspace?: WorkspaceConfig;
   hooks?: HooksConfig;
   agent?: AgentConfig;
+}
+
+export interface ProfileConfig {
+  [key: string]: unknown;
+  agent?: Partial<AgentConfig>;
+}
+
+/** Reference to a (possibly matrix-expanded) workflow */
+export interface ExpandedWorkflow {
+  path: string;
+  profileName?: string;
+  virtualName: string;
 }
 
 export interface TrackerConfig {

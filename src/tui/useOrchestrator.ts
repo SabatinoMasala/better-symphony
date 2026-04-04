@@ -5,6 +5,7 @@ import { logger, createFileSink } from "../logging/logger.js";
 import { createTuiSink } from "./sink.js";
 import type { LogLine } from "./types.js";
 import type { RuntimeSnapshot } from "../orchestrator/state.js";
+import type { ExpandedWorkflow } from "../config/types.js";
 
 interface OrchestratorLike {
   start(): Promise<void>;
@@ -30,7 +31,7 @@ export interface TuiState {
   error: string | null;
 }
 
-export function useOrchestrator(workflowPaths: string[], logFile?: string, debug?: boolean) {
+export function useOrchestrator(workflows: ExpandedWorkflow[], logFile?: string, debug?: boolean) {
   const orchestratorRef = useRef<OrchestratorLike | null>(null);
   const pendingLinesRef = useRef<LogLine[]>([]);
 
@@ -128,9 +129,9 @@ export function useOrchestrator(workflowPaths: string[], logFile?: string, debug
       logger.addSink(createFileSink(logFile));
     }
 
-    const orch: OrchestratorLike = workflowPaths.length > 1
-      ? new MultiOrchestrator({ workflowPaths, debug })
-      : new Orchestrator({ workflowPath: workflowPaths[0], debug });
+    const orch: OrchestratorLike = workflows.length > 1
+      ? new MultiOrchestrator({ workflows, debug })
+      : new Orchestrator({ workflowPath: workflows[0].path, profileName: workflows[0].profileName, debug });
     orchestratorRef.current = orch;
 
     orch

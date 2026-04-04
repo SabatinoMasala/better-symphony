@@ -11,6 +11,8 @@ import { createRoot } from "@opentui/react";
 import React from "react";
 import { App } from "./tui/App.js";
 import { logger, createFileSink } from "./logging/logger.js";
+import type { ExpandedWorkflow } from "./config/types.js";
+import { expandWorkflowPaths } from "./config/profiles.js";
 import pkg from "../package.json";
 
 // ── CLI Parsing ─────────────────────────────────────────────────
@@ -89,25 +91,10 @@ function parseArgs(): CLIOptions {
   if (options.workflowPaths.length === 0) {
     const workflowsDir = resolve(callerCwd, "workflows");
     if (existsSync(workflowsDir)) {
-      let mdFiles = readdirSync(workflowsDir)
+      const mdFiles = readdirSync(workflowsDir)
         .filter((f) => f.endsWith(".md"))
         .sort()
         .map((f) => join(workflowsDir, f));
-
-      // Apply filters if specified
-      if (options.filters.length > 0) {
-        const allFiles = mdFiles;
-        mdFiles = mdFiles.filter((f) => {
-          const name = basename(f).toLowerCase();
-          return options.filters.some((filter) => name.includes(filter.toLowerCase()));
-        });
-        if (mdFiles.length === 0) {
-          const available = allFiles.map((f) => basename(f)).join(", ");
-          console.error(`No workflows matched filter(s): ${options.filters.join(", ")}`);
-          console.error(`Available workflows: ${available}`);
-          process.exit(1);
-        }
-      }
 
       if (mdFiles.length > 0) {
         options.workflowPaths.push(...mdFiles);
@@ -131,7 +118,7 @@ Usage: symphony [options] [workflow-paths...]
 
 Options:
   -w, --workflow <paths...>  Workflow file(s) (default: workflows/*.md)
-  -f, --filter <strings...>  Filter auto-discovered workflows by filename substring
+  -f, --filter <strings...>  Filter workflows by name substring (matches virtual names for matrix workflows)
   -l, --log <path>           Log file path (appends JSON lines)
   --dry-run                  Render prompts for matching issues and print them (no agent launched)
   --routes                   Print workflow routing rules and exit
@@ -147,6 +134,7 @@ Examples:
   symphony                                          # Auto-detect workflows/*.md
   symphony -f github                                # Only github-related workflows
   symphony -f review -f dev                         # Review and dev workflows
+  symphony -f dev:cloud                             # Only the cloud profile of dev workflow
   symphony ./my-workflow.md                         # Run with custom workflow
   symphony -w dev.md qa.md                          # Override with specific workflows
   symphony --headless                               # Run without TUI
@@ -161,10 +149,36 @@ Environment Variables:
 `);
 }
 
+// ── Expand & Filter ─────────────────────────────────────────────
+
+function expandAndFilter(options: CLIOptions): ExpandedWorkflow[] {
+  let expanded = expandWorkflowPaths(options.workflowPaths);
+
+  if (options.filters.length > 0) {
+    const allNames = expanded.map((e) => e.virtualName);
+    expanded = expanded.filter((e) =>
+      options.filters.some((f) => e.virtualName.toLowerCase().includes(f.toLowerCase()))
+    );
+    if (expanded.length === 0) {
+      console.error(`No workflows matched filter(s): ${options.filters.join(", ")}`);
+      console.error(`Available workflows: ${allNames.join(", ")}`);
+      process.exit(1);
+    }
+  }
+
+  if (expanded.length === 0) {
+    console.error("No workflows to run (all had empty matrix?).");
+    process.exit(1);
+  }
+
+  return expanded;
+}
+
 // ── Routes Mode ─────────────────────────────────────────────────
 
-function printRoutes(options: CLIOptions): void {
+function printRoutes(workflows: ExpandedWorkflow[]): void {
   const { loadWorkflow, buildServiceConfig } = require("./config/loader.js");
+  const { loadProfileWorkflow } = require("./config/profiles.js");
 
   console.log("\nWorkflow Routes");
   console.log("===============\n");
@@ -178,10 +192,12 @@ function printRoutes(options: CLIOptions): void {
     excludedLabels: string[];
   }> = [];
 
-  for (const workflowPath of options.workflowPaths) {
-    const name = basename(workflowPath).replace(/\.md$/, "");
+  for (const wf of workflows) {
+    const name = wf.virtualName;
     try {
-      const workflow = loadWorkflow(workflowPath);
+      const workflow = wf.profileName
+        ? loadProfileWorkflow(wf.path, wf.profileName)
+        : loadWorkflow(wf.path);
       const config = buildServiceConfig(workflow);
       const t = config.tracker;
       const scope = t.kind === "linear" ? t.project_slug : t.repo;
@@ -265,30 +281,33 @@ async function main(): Promise<void> {
     }
   }
 
+  // Expand matrix workflows and apply filters
+  const workflows = expandAndFilter(options);
+
   // Routes mode: print routing summary and exit
   if (options.routes) {
-    printRoutes(options);
+    printRoutes(workflows);
     return;
   }
 
   // Dry run mode always runs headless (only supports single workflow)
   if (options.dryRun) {
-    await runDryRun(options);
+    await runDryRun(workflows[0], options);
     return;
   }
 
   if (options.web) {
-    await runWeb(options);
+    await runWeb(workflows, options);
   } else if (options.headless) {
-    await runHeadless(options);
+    await runHeadless(workflows, options);
   } else {
-    await runTui(options);
+    await runTui(workflows, options);
   }
 }
 
 // ── TUI Mode ────────────────────────────────────────────────────
 
-async function runTui(options: CLIOptions): Promise<void> {
+async function runTui(workflows: ExpandedWorkflow[], options: CLIOptions): Promise<void> {
   // Remove default console sink — TUI will handle all rendering
   logger.clearSinks();
 
@@ -298,7 +317,7 @@ async function runTui(options: CLIOptions): Promise<void> {
 
   createRoot(renderer).render(
     React.createElement(App, {
-      workflowPaths: options.workflowPaths,
+      workflows,
       logFile: options.logFile,
       debug: options.debug,
       renderer,
@@ -308,16 +327,16 @@ async function runTui(options: CLIOptions): Promise<void> {
 
 // ── Dry Run Mode ────────────────────────────────────────────────
 
-async function runDryRun(options: CLIOptions): Promise<void> {
+async function runDryRun(workflow: ExpandedWorkflow, options: CLIOptions): Promise<void> {
   const { Orchestrator } = await import("./orchestrator/orchestrator.js");
 
   if (options.debug) {
     logger.setMinLevel("debug");
   }
 
-  // Dry run uses first workflow only
   const orchestrator = new Orchestrator({
-    workflowPath: options.workflowPaths[0],
+    workflowPath: workflow.path,
+    profileName: workflow.profileName,
   });
 
   try {
@@ -337,18 +356,18 @@ interface OrchestratorHandle {
   getSnapshot(): any;
 }
 
-async function createOrchestrator(options: CLIOptions): Promise<OrchestratorHandle> {
-  if (options.workflowPaths.length > 1) {
+async function createOrchestrator(workflows: ExpandedWorkflow[], options: CLIOptions): Promise<OrchestratorHandle> {
+  if (workflows.length > 1) {
     const { MultiOrchestrator } = await import("./orchestrator/multi-orchestrator.js");
-    return new MultiOrchestrator({ workflowPaths: options.workflowPaths, debug: options.debug });
+    return new MultiOrchestrator({ workflows, debug: options.debug });
   }
   const { Orchestrator } = await import("./orchestrator/orchestrator.js");
-  return new Orchestrator({ workflowPath: options.workflowPaths[0], debug: options.debug });
+  return new Orchestrator({ workflowPath: workflows[0].path, profileName: workflows[0].profileName, debug: options.debug });
 }
 
 // ── Web Mode ────────────────────────────────────────────────────
 
-async function runWeb(options: CLIOptions): Promise<void> {
+async function runWeb(workflows: ExpandedWorkflow[], options: CLIOptions): Promise<void> {
   if (options.debug) {
     logger.setMinLevel("debug");
   }
@@ -357,7 +376,7 @@ async function runWeb(options: CLIOptions): Promise<void> {
     logger.addSink(createFileSink(options.logFile));
   }
 
-  const orchestrator = await createOrchestrator(options);
+  const orchestrator = await createOrchestrator(workflows, options);
 
   const { startWebServer } = await import("./web/server.js");
   const webServer = startWebServer({
@@ -388,8 +407,8 @@ async function runWeb(options: CLIOptions): Promise<void> {
 
   try {
     await orchestrator.start();
-    const label = options.workflowPaths.length > 1
-      ? `${options.workflowPaths.length} workflows`
+    const label = workflows.length > 1
+      ? `${workflows.length} workflows`
       : "1 workflow";
     logger.info(`Symphony is running (${label}) with web dashboard.`);
   } catch (err) {
@@ -401,7 +420,7 @@ async function runWeb(options: CLIOptions): Promise<void> {
 
 // ── Headless Mode ───────────────────────────────────────────────
 
-async function runHeadless(options: CLIOptions): Promise<void> {
+async function runHeadless(workflows: ExpandedWorkflow[], options: CLIOptions): Promise<void> {
   if (options.debug) {
     logger.setMinLevel("debug");
   }
@@ -410,7 +429,7 @@ async function runHeadless(options: CLIOptions): Promise<void> {
     logger.addSink(createFileSink(options.logFile));
   }
 
-  const orchestrator = await createOrchestrator(options);
+  const orchestrator = await createOrchestrator(workflows, options);
 
   const shutdown = async (signal: string) => {
     logger.info(`Received ${signal}, shutting down...`);
@@ -433,8 +452,8 @@ async function runHeadless(options: CLIOptions): Promise<void> {
 
   try {
     await orchestrator.start();
-    const label = options.workflowPaths.length > 1
-      ? `${options.workflowPaths.length} workflows`
+    const label = workflows.length > 1
+      ? `${workflows.length} workflows`
       : "1 workflow";
     logger.info(`Symphony is running (${label}). Press Ctrl+C to stop.`);
 
