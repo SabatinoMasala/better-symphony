@@ -151,12 +151,13 @@ export interface RuntimeSnapshot {
     name: string;
     max_concurrent_agents: number;
     running_count: number;
+    is_cron: boolean;
   }>;
   token_totals: TokenTotals;
   rate_limits: RateLimitInfo | null;
 }
 
-export function createSnapshot(state: OrchestratorState, workflowName: string | null = null): RuntimeSnapshot {
+export function createSnapshot(state: OrchestratorState, workflowName: string | null = null, isCron: boolean = false): RuntimeSnapshot {
   const now = Date.now();
 
   // Calculate live seconds_running including active sessions
@@ -191,6 +192,7 @@ export function createSnapshot(state: OrchestratorState, workflowName: string | 
       name: workflowName ?? "default",
       max_concurrent_agents: state.max_concurrent_agents,
       running_count: running.length,
+      is_cron: isCron,
     }],
     token_totals: {
       ...state.token_totals,

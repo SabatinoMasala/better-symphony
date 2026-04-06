@@ -98,6 +98,12 @@ export class CronTracker implements Tracker {
     return this.nextFireAt;
   }
 
+  /** Force the cron to fire on the next poll by setting nextFireAt to the past */
+  forceTrigger(): void {
+    this.nextFireAt = new Date(0);
+    logger.info("Cron trigger forced", { schedule: this.schedule, prefix: this.identifierPrefix });
+  }
+
   // ── No-op tracker methods (cron has no external issue state) ──
 
   async getIssue(_identifier: string): Promise<Issue | null> {

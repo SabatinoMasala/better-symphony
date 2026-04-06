@@ -12,6 +12,7 @@ interface OrchestratorLike {
   stop(): Promise<void>;
   forcePoll(): Promise<void>;
   getSnapshot(): RuntimeSnapshot | null;
+  triggerCron?(workflowName: string): Promise<boolean>;
 }
 
 const MAX_BUFFER = 5000;

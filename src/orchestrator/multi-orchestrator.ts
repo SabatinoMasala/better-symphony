@@ -336,6 +336,13 @@ export class MultiOrchestrator {
     };
   }
 
+  /** Trigger a cron workflow by name. Returns true if found and triggered. */
+  async triggerCron(workflowName: string): Promise<boolean> {
+    const entry = this.entries.find(e => e.isCron && e.orchestrator.getWorkflowName() === workflowName);
+    if (!entry) return false;
+    return entry.orchestrator.triggerCron();
+  }
+
   isRunning(): boolean {
     return this.running;
   }

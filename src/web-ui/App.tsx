@@ -42,7 +42,7 @@ export function App() {
       />
 
       <main className="flex flex-col flex-1 min-h-0 p-4 sm:p-6 gap-4">
-        <StatsCards snapshot={snapshot} onAgentClick={handleAgentClick} />
+        <StatsCards snapshot={snapshot} onAgentClick={handleAgentClick} onTriggerCron={actions.triggerCron} />
 
         <div className="flex flex-col gap-4">
           <div>

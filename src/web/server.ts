@@ -13,6 +13,7 @@ interface OrchestratorHandle {
   getSnapshot(): RuntimeSnapshot | null;
   forcePoll(): Promise<void>;
   stop(): Promise<void>;
+  triggerCron?(workflowName: string): Promise<boolean>;
 }
 
 export interface WebServerOptions {
@@ -123,6 +124,22 @@ export function startWebServer(options: WebServerOptions) {
           process.exit(0);
         }, 200);
         return Response.json({ ok: true });
+      }
+
+      if (pathname === "/api/trigger-cron" && req.method === "POST") {
+        try {
+          const body = await req.json() as { workflow?: string };
+          if (!body.workflow) {
+            return Response.json({ ok: false, error: "Missing workflow name" }, { status: 400 });
+          }
+          if (!orchestrator.triggerCron) {
+            return Response.json({ ok: false, error: "Trigger not supported" }, { status: 400 });
+          }
+          const triggered = await orchestrator.triggerCron(body.workflow);
+          return Response.json({ ok: triggered });
+        } catch {
+          return Response.json({ ok: false, error: "Invalid request" }, { status: 400 });
+        }
       }
 
       if (pathname === "/api/restart" && req.method === "POST") {

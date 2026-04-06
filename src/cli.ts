@@ -354,6 +354,7 @@ interface OrchestratorHandle {
   stop(): Promise<void>;
   forcePoll(): Promise<void>;
   getSnapshot(): any;
+  triggerCron?(workflowName: string): Promise<boolean>;
 }
 
 async function createOrchestrator(workflows: ExpandedWorkflow[], options: CLIOptions): Promise<OrchestratorHandle> {

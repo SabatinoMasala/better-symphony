@@ -7,9 +7,10 @@ import type { RuntimeSnapshot } from "../lib/use-sse";
 interface StatsCardsProps {
   snapshot: RuntimeSnapshot | null;
   onAgentClick?: (issueIdentifier: string) => void;
+  onTriggerCron?: (workflowName: string) => void;
 }
 
-export function StatsCards({ snapshot, onAgentClick }: StatsCardsProps) {
+export function StatsCards({ snapshot, onAgentClick, onTriggerCron }: StatsCardsProps) {
   const [showModal, setShowModal] = useState(false);
 
   const running = snapshot?.running.length ?? 0;
@@ -99,9 +100,26 @@ export function StatsCards({ snapshot, onAgentClick }: StatsCardsProps) {
                     <div key={wf.name} className="bg-muted/20 rounded-lg p-3">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium">{wf.name}</span>
-                        <Badge variant={wf.running_count > 0 ? "success" : "secondary"} className="text-xs">
-                          {wf.running_count} / {wf.max_concurrent_agents} agents
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          {wf.is_cron && (
+                            <button
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onTriggerCron?.(wf.name);
+                              }}
+                              title="Trigger cron workflow now"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                                <path d="M4 2a1 1 0 0 0-1.5.86v10.28a1 1 0 0 0 1.5.86l8.5-5.14a1 1 0 0 0 0-1.72L4 2Z"/>
+                              </svg>
+                              Trigger
+                            </button>
+                          )}
+                          <Badge variant={wf.running_count > 0 ? "success" : "secondary"} className="text-xs">
+                            {wf.running_count} / {wf.max_concurrent_agents} agents
+                          </Badge>
+                        </div>
                       </div>
                       <div className="w-full bg-muted rounded-full h-1.5">
                         <div

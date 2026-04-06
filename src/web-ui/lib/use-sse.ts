@@ -29,6 +29,7 @@ export interface RuntimeSnapshot {
     name: string;
     max_concurrent_agents: number;
     running_count: number;
+    is_cron: boolean;
   }>;
   token_totals: {
     input_tokens: number;
@@ -88,11 +89,19 @@ export function useSSE() {
     await fetch("/api/shutdown", { method: "POST" });
   }, []);
 
+  const triggerCron = useCallback(async (workflowName: string) => {
+    await fetch("/api/trigger-cron", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workflow: workflowName }),
+    });
+  }, []);
+
   return {
     snapshot,
     logs,
     connected,
     startTime: startTimeRef.current,
-    actions: { forcePoll, restart, shutdown },
+    actions: { forcePoll, restart, shutdown, triggerCron },
   };
 }

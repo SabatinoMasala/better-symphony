@@ -1399,7 +1399,7 @@ export class Orchestrator {
 
   getSnapshot(): state.RuntimeSnapshot | null {
     if (!this.orchState) return null;
-    return state.createSnapshot(this.orchState, this.workflowName);
+    return state.createSnapshot(this.orchState, this.workflowName, this.isCronTracker());
   }
 
   isRunning(): boolean {
@@ -1532,9 +1532,22 @@ export class Orchestrator {
     return this.config;
   }
 
+  /** Get workflow name */
+  getWorkflowName(): string {
+    return this.workflowName;
+  }
+
   /** Get workflow path */
   getWorkflowPath(): string {
     return this.workflowPath;
+  }
+
+  /** Trigger a cron workflow immediately. Returns true if this is a cron tracker. */
+  async triggerCron(): Promise<boolean> {
+    if (!this.isCronTracker() || !this.tracker) return false;
+    (this.tracker as CronTracker).forceTrigger();
+    await this.forcePoll();
+    return true;
   }
 }
 
