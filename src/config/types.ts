@@ -83,7 +83,7 @@ export interface ExpandedWorkflow {
 }
 
 export interface TrackerConfig {
-  kind: "linear" | "github-pr" | "github-issues";
+  kind: "linear" | "github-pr" | "github-issues" | "cron";
   // Linear-specific
   endpoint?: string;
   api_key?: string;
@@ -93,6 +93,8 @@ export interface TrackerConfig {
   error_states?: string[] | string;
   // GitHub-specific
   repo?: string;
+  // Cron-specific (e.g., "0 9 * * 1-5")
+  schedule?: string;
   // Shared
   /** Labels that must be present on an issue for it to be picked up */
   required_labels?: string[] | string;
@@ -150,7 +152,7 @@ export interface AgentConfig {
 
 export interface ServiceConfig {
   tracker: {
-    kind: "linear" | "github-pr" | "github-issues";
+    kind: "linear" | "github-pr" | "github-issues" | "cron";
     // Linear-specific (required for linear, empty string for github-pr)
     endpoint: string;
     api_key: string;
@@ -160,6 +162,8 @@ export interface ServiceConfig {
     error_states: string[];
     // GitHub-specific
     repo: string;
+    // Cron-specific
+    schedule: string;
     // Shared
     required_labels: string[];
     excluded_labels: string[];

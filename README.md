@@ -1,6 +1,6 @@
 # Better Symphony
 
-A headless coding agent orchestrator that polls issue trackers (Linear, GitHub Issues, GitHub PRs) for work items, dispatches AI agents (Claude Code), and manages the full development lifecycle.
+A headless coding agent orchestrator that polls issue trackers (Linear, GitHub Issues, GitHub PRs) or runs on cron schedules, dispatches AI agents (Claude Code), and manages the full development lifecycle.
 
 ## Installation
 
@@ -68,6 +68,7 @@ This repo includes example workflows you can copy into your project's `workflows
 - **`workflows/ralph.md`** - Ralph agent: loops through subtasks with fresh context per subtask
 - **`workflows/pr-review.md`** - PR review agent: reviews GitHub PRs, runs tests, and posts review comments
 - **`workflows/github-issues.md`** - GitHub Issues agent: implements tasks from GitHub Issues
+- **`workflows/cron.md`** - Cron agent: runs on a schedule instead of polling a tracker
 
 Each workflow specifies which labels to watch for (e.g., `agent:dev`), so multiple workflows can run in parallel without conflicts.
 
@@ -75,7 +76,7 @@ Each workflow specifies which labels to watch for (e.g., `agent:dev`), so multip
 
 - **`src/cli.ts`** - Entry point and argument parsing
 - **`src/orchestrator/`** - Poll loop, scheduling, concurrency control, and multi-workflow coordination
-- **`src/tracker/`** - Tracker implementations (Linear GraphQL, GitHub Issues, GitHub PRs via `gh` CLI)
+- **`src/tracker/`** - Tracker implementations (Linear GraphQL, GitHub Issues, GitHub PRs via `gh` CLI, Cron)
 - **`src/workspace/`** - Per-issue workspace creation/cleanup and shell hooks
 - **`src/agent/`** - Agent harness (spawns Claude CLI, parses stream-json output)
 - **`src/config/`** - YAML frontmatter + Liquid template parsing
@@ -236,6 +237,67 @@ When done, use `gh pr edit {{ issue.number }} --add-label "review:complete"` to 
 ```
 
 The GitHub PR tracker exposes additional template variables: `issue.branch_name`, `issue.base_branch`, `issue.author`, `issue.files_changed`, and `issue.comments`.
+
+### Cron Tracker
+
+For scheduled tasks that run on a cron schedule instead of polling an issue tracker, use `kind: cron`:
+
+```yaml
+---
+tracker:
+  kind: cron
+  schedule: "0 9 * * 1-5"
+
+workspace:
+  root: ~/.symphony/cron-jobs
+
+agent:
+  binary: claude
+  max_concurrent_agents: 1
+  max_turns: 50
+---
+
+You are running a scheduled maintenance task.
+
+**Schedule:** {{ cron.schedule }}
+**Run #{{ cron.run_number }}**
+**Scheduled at:** {{ cron.scheduled_at }}
+
+Do the thing...
+```
+
+The `schedule` field accepts standard cron expressions powered by [croner](https://github.com/Hexagon/croner). Croner supports an optional 6th field for **seconds**, enabling sub-minute scheduling:
+
+```
+┌──────────── second (0-59, optional)
+│ ┌────────── minute (0-59)
+│ │ ┌──────── hour (0-23)
+│ │ │ ┌────── day of month (1-31)
+│ │ │ │ ┌──── month (1-12)
+│ │ │ │ │ ┌── day of week (0-7, 0 and 7 = Sunday)
+│ │ │ │ │ │
+* * * * * *
+```
+
+Examples:
+- `"*/30 * * * * *"` — every 30 seconds
+- `"* * * * *"` — every minute
+- `"0 9 * * 1-5"` — weekdays at 9am
+- `"0 */6 * * *"` — every 6 hours
+
+Template variables available in cron workflows:
+
+| Variable | Description |
+|----------|-------------|
+| `{{ cron.schedule }}` | The cron expression |
+| `{{ cron.run_number }}` | Incrementing run counter |
+| `{{ cron.scheduled_at }}` | When the run was scheduled (ISO 8601) |
+| `{{ cron.triggered_at }}` | When the run actually started (ISO 8601) |
+
+Key behaviors:
+- **Workspace is persistent** — reused across runs, not cleaned up after each run
+- **Standard cron semantics** — if a run is still in progress when the next fire time arrives, it is skipped (controlled by `max_concurrent_agents`)
+- **Retries** — if the agent errors, exponential backoff retries apply
 
 ### Matrix Workflows
 

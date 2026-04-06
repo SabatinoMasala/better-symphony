@@ -22,6 +22,8 @@ interface WorkflowEntry {
   profileName?: string;
   apiKey: string;
   orchestrator: Orchestrator;
+  /** Cron workflows run their own poll loop independently */
+  isCron: boolean;
 }
 
 export class MultiOrchestrator {
@@ -44,7 +46,7 @@ export class MultiOrchestrator {
       workflows: this.workflows.length,
     });
 
-    // Start each orchestrator in managed mode, creating per-key LinearClients
+    // Start each orchestrator, creating per-key LinearClients for tracker workflows
     for (const wf of this.workflows) {
       const workflow = wf.profileName
         ? loadProfileWorkflow(wf.path, wf.profileName)
@@ -56,26 +58,43 @@ export class MultiOrchestrator {
         throw new Error(`Workflow validation failed for ${wf.virtualName}: ${validation.errors.join(", ")}`);
       }
 
-      const apiKey = config.tracker.api_key;
-      const client = this.getOrCreateClient(config.tracker.endpoint, apiKey);
+      const isCron = config.tracker.kind === "cron";
 
-      const orchestrator = new Orchestrator({
-        workflowPath: wf.path,
-        profileName: wf.profileName,
-        linearClient: client,
-        managedPolling: true,
-        debug: this.debug,
-      });
+      if (isCron) {
+        // Cron workflows run their own poll loop independently
+        const orchestrator = new Orchestrator({
+          workflowPath: wf.path,
+          profileName: wf.profileName,
+          managedPolling: false,
+          debug: this.debug,
+        });
 
-      await orchestrator.start();
-      this.entries.push({ path: wf.path, profileName: wf.profileName, apiKey, orchestrator });
+        await orchestrator.start();
+        this.entries.push({ path: wf.path, profileName: wf.profileName, apiKey: "", orchestrator, isCron: true });
+      } else {
+        // Tracker workflows share LinearClients and use managed polling
+        const apiKey = config.tracker.api_key;
+        const client = this.getOrCreateClient(config.tracker.endpoint, apiKey);
 
-      logger.info(`Loaded workflow: ${wf.virtualName}`);
+        const orchestrator = new Orchestrator({
+          workflowPath: wf.path,
+          profileName: wf.profileName,
+          linearClient: client,
+          managedPolling: true,
+          debug: this.debug,
+        });
+
+        await orchestrator.start();
+        this.entries.push({ path: wf.path, profileName: wf.profileName, apiKey, orchestrator, isCron: false });
+      }
+
+      logger.info(`Loaded workflow: ${wf.virtualName}${isCron ? " (cron)" : ""}`);
     }
 
     // Log detected API key sources (env var names, not values)
+    const trackerEntries = this.entries.filter(e => !e.isCron);
     const keySourceMap = new Map<string, string>();
-    for (const entry of this.entries) {
+    for (const entry of trackerEntries) {
       const rawWorkflow = loadWorkflow(entry.path);
       const rawKey = rawWorkflow.config.tracker?.api_key;
       if (entry.apiKey && rawKey?.startsWith("$")) {
@@ -84,10 +103,12 @@ export class MultiOrchestrator {
         keySourceMap.set(entry.apiKey, "LINEAR_API_KEY");
       }
     }
-    const sources = [...keySourceMap.values()];
-    logger.info(`Detected API keys: ${sources.join(", ")}`, {
-      linearClients: this.linearClients.size,
-    });
+    if (keySourceMap.size > 0) {
+      const sources = [...keySourceMap.values()];
+      logger.info(`Detected API keys: ${sources.join(", ")}`, {
+        linearClients: this.linearClients.size,
+      });
+    }
 
     // Start shared poll loop
     this.running = true;
@@ -138,17 +159,19 @@ export class MultiOrchestrator {
   }
 
   private async pollTick(): Promise<void> {
-    if (this.linearClients.size === 0) return;
+    // Only tracker workflows use the shared poll loop; cron workflows run independently
+    const trackerEntries = this.entries.filter(e => !e.isCron);
+    if (this.linearClients.size === 0 && trackerEntries.length === 0) return;
 
     try {
-      // Step 1: Stall detection on all orchestrators
-      for (const entry of this.entries) {
+      // Step 1: Stall detection on tracker orchestrators
+      for (const entry of trackerEntries) {
         entry.orchestrator.runStallDetection();
       }
 
       // Step 2: Batched reconciliation — group running IDs by API key
       const runningByKey = new Map<string, { ids: string[]; entries: WorkflowEntry[] }>();
-      for (const entry of this.entries) {
+      for (const entry of trackerEntries) {
         const ids = entry.orchestrator.getRunningIssueIds();
         if (ids.length === 0) continue;
         let group = runningByKey.get(entry.apiKey);
@@ -173,8 +196,8 @@ export class MultiOrchestrator {
         }
       }
 
-      // Step 3: Refresh configs on all orchestrators
-      for (const entry of this.entries) {
+      // Step 3: Refresh configs on tracker orchestrators
+      for (const entry of trackerEntries) {
         entry.orchestrator.refreshConfig();
       }
 
@@ -240,6 +263,7 @@ export class MultiOrchestrator {
     const groups = new Map<string, { apiKey: string; slug: string; items: Array<{ entry: WorkflowEntry; config: ServiceConfig }> }>();
 
     for (const entry of this.entries) {
+      if (entry.isCron) continue; // Cron workflows are not grouped
       const config = entry.orchestrator.getServiceConfig();
       if (!config) continue;
 
@@ -256,10 +280,11 @@ export class MultiOrchestrator {
     return groups;
   }
 
-  /** Use the minimum poll interval across all workflows */
+  /** Use the minimum poll interval across tracker workflows (cron workflows manage their own) */
   private getPollInterval(): number {
     let min = 30000;
     for (const entry of this.entries) {
+      if (entry.isCron) continue;
       const config = entry.orchestrator.getServiceConfig();
       if (config && config.polling.interval_ms < min) {
         min = config.polling.interval_ms;

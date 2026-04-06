@@ -6,7 +6,7 @@
 import type { Issue, ChildIssue, Comment } from "../config/types.js";
 
 export interface TrackerConfig {
-  kind: "linear" | "github-pr" | "github-issues";
+  kind: "linear" | "github-pr" | "github-issues" | "cron";
   // Linear-specific
   api_key?: string;
   endpoint?: string;
@@ -15,6 +15,8 @@ export interface TrackerConfig {
   terminal_states?: string[];
   // GitHub-specific
   repo?: string;
+  // Cron-specific
+  schedule?: string;
   // Shared
   required_labels?: string[];
   excluded_labels?: string[];
@@ -69,6 +71,10 @@ export async function createTracker(config: TrackerConfig): Promise<Tracker> {
     case "github-issues": {
       const { GitHubIssuesTracker } = await import("./github-issues-tracker.js");
       return new GitHubIssuesTracker(config);
+    }
+    case "cron": {
+      const { CronTracker } = await import("./cron-tracker.js");
+      return new CronTracker(config);
     }
     default:
       throw new Error(`Unknown tracker kind: ${(config as any).kind}`);

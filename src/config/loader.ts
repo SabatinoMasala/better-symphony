@@ -138,7 +138,7 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
 
   // Tracker config
   const trackerKind = cfg.tracker?.kind || "linear";
-  if (trackerKind !== "linear" && trackerKind !== "github-pr" && trackerKind !== "github-issues") {
+  if (trackerKind !== "linear" && trackerKind !== "github-pr" && trackerKind !== "github-issues" && trackerKind !== "cron") {
     throw new WFError("workflow_parse_error", `Unsupported tracker kind: ${trackerKind}`);
   }
 
@@ -170,22 +170,26 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
 
   return {
     tracker: {
-      kind: trackerKind as "linear" | "github-pr",
+      kind: trackerKind as "linear" | "github-pr" | "github-issues" | "cron",
       // Linear-specific (empty for github-pr)
       endpoint: cfg.tracker?.endpoint || DEFAULT_LINEAR_ENDPOINT,
       api_key: apiKey,
       project_slug: projectSlug,
-      active_states: parseStateList(cfg.tracker?.active_states, 
-        trackerKind === "github-pr" ? ["Open"] : 
-        trackerKind === "github-issues" ? ["open"] : 
+      active_states: parseStateList(cfg.tracker?.active_states,
+        trackerKind === "cron" ? ["scheduled"] :
+        trackerKind === "github-pr" ? ["Open"] :
+        trackerKind === "github-issues" ? ["open"] :
         DEFAULT_ACTIVE_STATES),
       terminal_states: parseStateList(cfg.tracker?.terminal_states,
+        trackerKind === "cron" ? ["completed"] :
         trackerKind === "github-pr" ? ["Closed"] :
         trackerKind === "github-issues" ? ["closed"] :
         DEFAULT_TERMINAL_STATES),
       error_states: parseStateList(cfg.tracker?.error_states, DEFAULT_ERROR_STATES),
       // GitHub-specific (empty for linear)
       repo: repo,
+      // Cron-specific
+      schedule: cfg.tracker?.schedule || "",
       // Shared
       required_labels: parseStateList(cfg.tracker?.required_labels, []),
       excluded_labels: parseStateList(cfg.tracker?.excluded_labels, []),
@@ -254,6 +258,12 @@ export function validateServiceConfig(config: ServiceConfig): ValidationResult {
   if (config.tracker.kind === "github-issues") {
     if (!config.tracker.repo) {
       errors.push("tracker.repo is required for GitHub Issues tracker (e.g., 'owner/repo')");
+    }
+  }
+
+  if (config.tracker.kind === "cron") {
+    if (!config.tracker.schedule) {
+      errors.push("tracker.schedule is required for cron tracker (e.g., '*/5 * * * *')");
     }
   }
 
@@ -347,6 +357,45 @@ export async function renderSubtaskPrompt(
     throw new WFError(
       "template_render_error",
       `Failed to render subtask prompt template: ${(err as Error).message}`
+    );
+  }
+}
+
+// ── Cron Prompt Rendering ───────────────────────────────────────
+
+export interface CronContext {
+  schedule: string;
+  run_number: number;
+  scheduled_at: string;
+  triggered_at: string;
+}
+
+export async function renderCronPrompt(
+  template: string,
+  cronContext: CronContext,
+  issue: Issue,
+  attempt: number | null
+): Promise<string> {
+  if (!template.trim()) {
+    return `Scheduled run #${cronContext.run_number} (${cronContext.schedule})`;
+  }
+
+  try {
+    const result = await liquid.parseAndRender(template, {
+      cron: cronContext,
+      issue: {
+        ...issue,
+        labels: issue.labels,
+        blocked_by: issue.blocked_by,
+        comments: issue.comments,
+      },
+      attempt,
+    });
+    return result;
+  } catch (err) {
+    throw new WFError(
+      "template_render_error",
+      `Failed to render cron prompt template: ${(err as Error).message}`
     );
   }
 }

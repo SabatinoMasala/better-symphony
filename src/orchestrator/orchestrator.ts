@@ -21,7 +21,9 @@ import {
   validateServiceConfig,
   renderPrompt,
   renderSubtaskPrompt,
+  renderCronPrompt,
 } from "../config/loader.js";
+import type { CronContext } from "../config/loader.js";
 import { loadProfileWorkflow } from "../config/profiles.js";
 import { basename, join } from "path";
 import { mkdirSync, writeFileSync } from "fs";
@@ -29,6 +31,7 @@ import { homedir } from "os";
 import { LinearClient } from "../tracker/client.js";
 import { GitHubPRTracker } from "../tracker/github-pr-tracker.js";
 import { GitHubIssuesTracker } from "../tracker/github-issues-tracker.js";
+import { CronTracker } from "../tracker/cron-tracker.js";
 import type { Tracker } from "../tracker/interface.js";
 import { WorkspaceManager } from "../workspace/manager.js";
 import { ClaudeRunner } from "../agent/claude-runner.js";
@@ -93,8 +96,16 @@ export class Orchestrator {
     return this.config?.tracker.kind === "github-pr" || this.config?.tracker.kind === "github-issues";
   }
 
+  private isCronTracker(): boolean {
+    return this.config?.tracker.kind === "cron";
+  }
+
   private async fetchCandidateIssues(): Promise<Issue[]> {
     if (!this.config) throw new Error("Config not initialized");
+
+    if (this.isCronTracker() && this.tracker) {
+      return this.tracker.fetchCandidates({});
+    }
 
     if (this.isGitHubTracker() && this.tracker) {
       return this.tracker.fetchCandidates({
@@ -214,7 +225,15 @@ export class Orchestrator {
     }
 
     // Initialize tracker based on kind
-    if (this.config.tracker.kind === "github-pr") {
+    if (this.config.tracker.kind === "cron") {
+      // Cron tracker
+      this.tracker = new CronTracker({
+        kind: "cron",
+        schedule: this.config.tracker.schedule,
+        project_slug: this.config.tracker.project_slug || this.workflowName,
+      });
+      logger.info("Using cron tracker", { schedule: this.config.tracker.schedule });
+    } else if (this.config.tracker.kind === "github-pr") {
       // GitHub PR tracker
       this.tracker = new GitHubPRTracker({
         kind: "github-pr",
@@ -287,6 +306,42 @@ export class Orchestrator {
         logger.error(`Validation error: ${error}`);
       }
       throw new Error(`Configuration validation failed: ${validation.errors.join(", ")}`);
+    }
+
+    if (this.config.tracker.kind === "cron") {
+      // Cron dry run: show the rendered prompt with sample context
+      const cronContext: CronContext = {
+        schedule: this.config.tracker.schedule,
+        run_number: 1,
+        scheduled_at: new Date().toISOString(),
+        triggered_at: new Date().toISOString(),
+      };
+      const syntheticIssue: Issue = {
+        id: "cron-dry-run",
+        identifier: this.config.tracker.project_slug || this.workflowName,
+        title: "Scheduled run #1",
+        description: null,
+        priority: null,
+        state: "scheduled",
+        branch_name: null,
+        url: null,
+        labels: [],
+        blocked_by: [],
+        children: [],
+        comments: [],
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      const prompt = await renderCronPrompt(this.workflow.prompt_template, cronContext, syntheticIssue, null);
+
+      console.log(`${"─".repeat(60)}`);
+      console.log(`Cron workflow: ${this.workflowName}`);
+      console.log(`Schedule: ${this.config.tracker.schedule}`);
+      console.log(`${"─".repeat(60)}`);
+      console.log(prompt);
+      console.log();
+      return;
     }
 
     this.linearClient = new LinearClient(
@@ -457,7 +512,10 @@ export class Orchestrator {
   // ── Startup Cleanup ───────────────────────────────────────────
 
   private async startupCleanup(): Promise<void> {
-    if (!this.config || !this.linearClient || !this.workspaceManager) return;
+    if (!this.config || !this.workspaceManager) return;
+    // Cron workspaces are persistent — skip cleanup
+    if (this.isCronTracker()) return;
+    if (!this.linearClient && !this.tracker) return;
 
     try {
       // Fetch terminal state issues
@@ -507,6 +565,22 @@ export class Orchestrator {
       return;
     }
 
+    // Cron workflows skip reconciliation (no external state to check)
+    if (this.isCronTracker()) {
+      try {
+        this.runStallDetection();
+        if (!this.refreshConfig()) return;
+        const issues = await this.fetchCandidateIssues();
+        const dispatched = this.dispatchFromIssues(issues);
+        if (dispatched > 0) {
+          logger.info(`Dispatched ${dispatched} cron run(s)`);
+        }
+      } catch (err) {
+        logger.error(`Cron poll tick failed: ${(err as Error).message}`);
+      }
+      return;
+    }
+
     try {
       // Part 1: Reconcile running issues
       await this.reconcile();
@@ -532,6 +606,11 @@ export class Orchestrator {
 
   private async reconcile(): Promise<void> {
     if (!this.config || (!this.linearClient && !this.tracker) || !this.orchState || !this.workspaceManager) {
+      return;
+    }
+    // Cron workflows have no external state to reconcile
+    if (this.isCronTracker()) {
+      this.runStallDetection();
       return;
     }
 
@@ -619,8 +698,40 @@ export class Orchestrator {
 
       // Check if ralph_loop mode with children
       const isRalphLoop = config.agent.mode === "ralph_loop" && issue.children.length > 0;
+      const isCron = this.isCronTracker();
 
-      if (isRalphLoop) {
+      if (isCron) {
+        // Cron Mode: Run the prompt, success = agent exits cleanly
+        runAttempt.status = "BuildingPrompt";
+        const cronTracker = this.tracker as CronTracker;
+        const cronContext: CronContext = {
+          schedule: config.tracker.schedule,
+          run_number: cronTracker.getRunCounter(),
+          scheduled_at: issue.created_at?.toISOString() ?? new Date().toISOString(),
+          triggered_at: new Date().toISOString(),
+        };
+        const prompt = await renderCronPrompt(workflow.prompt_template, cronContext, issue, runAttempt.attempt);
+
+        this.writePromptDebug(workspace.path, `${issue.identifier}-run-${cronTracker.getRunCounter()}`, prompt);
+
+        runAttempt.status = "LaunchingAgentProcess";
+        try {
+          await this.runAgentOnce(issue, workspace.path, prompt, runAttempt.attempt, abortController, config);
+          runAttempt.status = "Succeeded";
+          logger.info(`Cron run completed for ${issue.identifier}`, {
+            issue_id: issue.id,
+            run_number: cronTracker.getRunCounter(),
+          });
+        } catch (err) {
+          runAttempt.status = "Failed";
+          runAttempt.error = (err as Error).message;
+          logger.error(`Cron run failed for ${issue.identifier}: ${runAttempt.error}`, {
+            issue_id: issue.id,
+            run_number: cronTracker.getRunCounter(),
+          });
+          await this.queueRetry(issue, (runAttempt.attempt ?? 0) + 1, runAttempt.error);
+        }
+      } else if (isRalphLoop) {
         // Ralph Loop Mode: Run through subtasks externally
         const allDone = await this.runRalphLoop(issue, workspace.path, runAttempt, abortController, workflow, config);
 
@@ -716,7 +827,8 @@ export class Orchestrator {
         state.releaseClaim(orchState, issue.id);
 
         // Clean up workspace when issue reached terminal state (no more work to do)
-        if (runAttempt.status === "Succeeded" && runAttempt.workspace_path) {
+        // Cron workspaces are persistent — never clean them up
+        if (!this.isCronTracker() && runAttempt.status === "Succeeded" && runAttempt.workspace_path) {
           await workspaceManager.removeWorkspace(issue.identifier);
         }
       }
@@ -1137,15 +1249,17 @@ export class Orchestrator {
         issue_identifier: issue.identifier,
         attempt,
       });
-      // Add symphony:error label to prevent infinite re-dispatch
-      try {
-        await this.addLabel(issue.id, "symphony:error", "#e5484d");
-      } catch (err) {
-        logger.warn(`Failed to add symphony:error label to ${issue.identifier}: ${(err as Error).message}`);
+      if (!this.isCronTracker()) {
+        // Add symphony:error label to prevent infinite re-dispatch
+        try {
+          await this.addLabel(issue.id, "symphony:error", "#e5484d");
+        } catch (err) {
+          logger.warn(`Failed to add symphony:error label to ${issue.identifier}: ${(err as Error).message}`);
+        }
       }
       state.releaseClaim(this.orchState, issue.id);
-      // Clean up workspace since no more retries will happen
-      if (this.workspaceManager) {
+      // Clean up workspace since no more retries will happen (cron workspaces are persistent)
+      if (!this.isCronTracker() && this.workspaceManager) {
         await this.workspaceManager.removeWorkspace(issue.identifier);
       }
       return;
@@ -1204,12 +1318,47 @@ export class Orchestrator {
   }
 
   private async handleRetryFired(issueId: string): Promise<void> {
-    if (!this.config || !this.linearClient || !this.orchState) return;
+    if (!this.config || !this.orchState) return;
+    if (!this.linearClient && !this.tracker) return;
 
     const retryEntry = state.removeRetry(this.orchState, issueId);
     if (!retryEntry) return;
 
     try {
+      // For cron, reconstruct the synthetic issue directly — cron candidates
+      // have unique IDs per fire, so the original would never appear in a fresh fetch.
+      if (this.isCronTracker()) {
+        if (scheduler.getAvailableSlots(this.orchState, this.config) <= 0) {
+          await this.queueRetry(
+            { id: issueId, identifier: retryEntry.identifier } as Issue,
+            retryEntry.attempt,
+            "no available orchestrator slots"
+          );
+          return;
+        }
+
+        const syntheticIssue: Issue = {
+          id: issueId,
+          identifier: retryEntry.identifier,
+          title: `Scheduled run (retry #${retryEntry.attempt})`,
+          description: null,
+          priority: null,
+          state: "scheduled",
+          branch_name: null,
+          url: null,
+          labels: [],
+          blocked_by: [],
+          children: [],
+          comments: [],
+          created_at: new Date(),
+          updated_at: new Date(),
+        };
+
+        state.releaseClaim(this.orchState, issueId);
+        this.dispatch(syntheticIssue, retryEntry.attempt);
+        return;
+      }
+
       // Fetch active candidates
       const candidates = await this.fetchCandidateIssues();
 
