@@ -88,7 +88,7 @@ export function StatsCards({ snapshot, onAgentClick }: StatsCardsProps) {
               </button>
             </div>
 
-            <div className="p-4 space-y-3">
+            <div className="p-4 space-y-3 max-h-[80vh] overflow-y-auto">
               {workflows.length === 0 ? (
                 <div className="text-center text-muted-foreground py-4">No workflows loaded</div>
               ) : (
