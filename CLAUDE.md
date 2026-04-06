@@ -51,6 +51,10 @@ tsc --noEmit                                   # Type check (no build step neede
 
 Agents receive `SYMPHONY_LINEAR` (path to Linear CLI), `SYMPHONY_WORKSPACE` (workspace path), `SYMPHONY_ISSUE_IDENTIFIER` (e.g., `SYM-123`), and `GH_REPO` (for GitHub trackers) in their environment.
 
+## Releasing
+
+Tags trigger CI to publish to npm. Always use the `v` prefix: `git tag v1.2.0 && git push origin v1.2.0`.
+
 ## Tech Stack
 
 - **Runtime**: Bun (executes TypeScript directly, no build step)
