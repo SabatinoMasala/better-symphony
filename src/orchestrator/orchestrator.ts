@@ -35,6 +35,7 @@ import { CronTracker } from "../tracker/cron-tracker.js";
 import type { Tracker } from "../tracker/interface.js";
 import { WorkspaceManager } from "../workspace/manager.js";
 import { ClaudeRunner } from "../agent/claude-runner.js";
+import { CodexRunner } from "../agent/codex-runner.js";
 import { parseRateLimits } from "../agent/session.js";
 import { logger } from "../logging/logger.js";
 import * as state from "./state.js";
@@ -1109,41 +1110,80 @@ export class Orchestrator {
     config: ServiceConfig
   ): Promise<void> {
     const binary = config.agent.binary;
+    const fallbackBinary = config.agent.fallback_binary;
 
-    if (binary === "claude") {
-      let transcriptPath: string | undefined;
-      if (this.debug) {
-        const logsDir = join(homedir(), ".symphony", "logs");
-        mkdirSync(logsDir, { recursive: true });
-        const ts = new Date().toISOString().replace(/[:.]/g, "-");
-        transcriptPath = join(logsDir, `transcript-${issue.identifier}-${ts}.md`);
+    try {
+      await this.runWithBinary(binary, issue, workspacePath, prompt, attempt, abortController, config);
+    } catch (err) {
+      // If aborted or no fallback configured, propagate immediately
+      if (abortController.signal.aborted || !fallbackBinary || fallbackBinary === binary) {
+        throw err;
       }
 
+      logger.warn(`Primary binary "${binary}" failed for ${issue.identifier}, falling back to "${fallbackBinary}"`, {
+        issue_identifier: issue.identifier,
+        primary_binary: binary,
+        fallback_binary: fallbackBinary,
+        error: (err as Error).message,
+      });
+
+      await this.runWithBinary(fallbackBinary, issue, workspacePath, prompt, attempt, abortController, config);
+    }
+  }
+
+  private async runWithBinary(
+    binary: string,
+    issue: Issue,
+    workspacePath: string,
+    prompt: string,
+    attempt: number | null,
+    abortController: AbortController,
+    config: ServiceConfig
+  ): Promise<void> {
+    let transcriptPath: string | undefined;
+    if (this.debug) {
+      const logsDir = join(homedir(), ".symphony", "logs");
+      mkdirSync(logsDir, { recursive: true });
+      const ts = new Date().toISOString().replace(/[:.]/g, "-");
+      transcriptPath = join(logsDir, `transcript-${issue.identifier}-${binary}-${ts}.md`);
+    }
+
+    const makeOnEvent = (runner: { getSession(): import("../config/types.js").LiveSession | null }) => {
+      return (event: AgentEvent) => {
+        const entry = this.orchState?.running.get(issue.id);
+        if (entry) {
+          entry.session = runner.getSession();
+        }
+        this.handleAgentEvent(issue.id, event);
+      };
+    };
+
+    if (binary === "claude") {
       const runner = new ClaudeRunner({
         config,
         issue,
         workspacePath,
         prompt,
         attempt,
-        onEvent: (event) => {
-          // Link runner session to running entry for stall detection.
-          // Without this, entry.session stays null and stall detection falls back to
-          // entry.attempt.started_at, causing ralph loops to be killed after stall_timeout_ms
-          // even when the agent is actively working on subtasks.
-          // NOTE: In ralph_loop mode, each subtask gets a new runner/session, so we must
-          // always update (not just when null) to track the current subtask's activity.
-          const entry = this.orchState?.running.get(issue.id);
-          if (entry) {
-            entry.session = runner.getSession();
-          }
-          this.handleAgentEvent(issue.id, event);
-        },
+        onEvent: (event) => makeOnEvent(runner)(event),
+        abortSignal: abortController.signal,
+        transcriptPath,
+      });
+      await runner.run();
+    } else if (binary === "codex") {
+      const runner = new CodexRunner({
+        config,
+        issue,
+        workspacePath,
+        prompt,
+        attempt,
+        onEvent: (event) => makeOnEvent(runner)(event),
         abortSignal: abortController.signal,
         transcriptPath,
       });
       await runner.run();
     } else {
-      throw new Error(`Unsupported binary: ${binary}. Only "claude" is currently implemented.`);
+      throw new Error(`Unsupported binary: ${binary}. Only "claude" and "codex" are currently implemented.`);
     }
   }
 
