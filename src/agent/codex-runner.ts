@@ -275,7 +275,7 @@ export class CodexRunner extends BaseRunner {
 }
 
 /** Format a Codex file_change changes array into a human-readable string */
-function formatChanges(changes: any[] | undefined): string {
+export function formatChanges(changes: any[] | undefined): string {
   if (!changes?.length) return "file";
   return changes.map((c: any) => {
     const name = (c.path ?? "").split("/").pop() ?? c.path ?? "";
