@@ -12,10 +12,10 @@ import {
   extractBlockText,
   getLinearSystemPrompt,
   getGitHubSystemPrompt,
-} from "./runner-base.js";
+} from "./base-runner.js";
 
 // Re-export types for backward compatibility (used by orchestrator imports)
-export type { RunnerOptions as ClaudeRunnerOptions, AgentEventCallback } from "./runner-base.js";
+export type { RunnerOptions as ClaudeRunnerOptions, AgentEventCallback } from "./base-runner.js";
 
 export class ClaudeRunner extends BaseRunner {
   protected readonly runnerName = "Claude";

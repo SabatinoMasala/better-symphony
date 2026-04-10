@@ -15,7 +15,7 @@ import {
   stripAnsi,
   getLinearSystemPrompt,
   getGitHubSystemPrompt,
-} from "./runner-base.js";
+} from "./base-runner.js";
 
 export class CodexRunner extends BaseRunner {
   protected readonly runnerName = "Codex";
