@@ -289,6 +289,9 @@ export abstract class BaseRunner {
     if (config.tracker.api_key) {
       envVars.SYMPHONY_LINEAR_API_KEY = config.tracker.api_key;
     }
+    if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+      envVars.CLAUDE_CODE_OAUTH_TOKEN = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    }
     for (const [key, value] of Object.entries(envVars)) {
       yoloboxExtraArgs.push("--env", `${key}=${value}`);
     }
