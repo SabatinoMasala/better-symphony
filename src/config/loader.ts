@@ -222,6 +222,7 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
       yolobox_arguments: Array.isArray(cfg.agent?.yolobox_arguments) ? cfg.agent.yolobox_arguments : [],
       permission_mode: cfg.agent?.permission_mode || DEFAULT_PERMISSION_MODE,
       append_system_prompt: cfg.agent?.append_system_prompt || null,
+      fallback_binary: (cfg.agent?.fallback_binary as AgentBinary) || null,
     },
   };
 }
@@ -270,6 +271,9 @@ export function validateServiceConfig(config: ServiceConfig): ValidationResult {
   const validBinaries = ["claude", "codex", "opencode"];
   if (!validBinaries.includes(config.agent.binary)) {
     errors.push(`agent.binary must be one of: ${validBinaries.join(", ")}`);
+  }
+  if (config.agent.fallback_binary && !validBinaries.includes(config.agent.fallback_binary)) {
+    errors.push(`agent.fallback_binary must be one of: ${validBinaries.join(", ")}`);
   }
 
   return {

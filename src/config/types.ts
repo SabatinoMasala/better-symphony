@@ -146,6 +146,8 @@ export interface AgentConfig {
   permission_mode?: string;
   /** Append to system prompt */
   append_system_prompt?: string;
+  /** Fallback binary to try when the primary binary fails (e.g., auth errors) */
+  fallback_binary?: string;
 }
 
 // ── Service Config (Typed View) ─────────────────────────────────
@@ -196,6 +198,7 @@ export interface ServiceConfig {
     yolobox_arguments: string[];
     permission_mode: string;
     append_system_prompt: string | null;
+    fallback_binary: AgentBinary | null;
   };
 }
 
