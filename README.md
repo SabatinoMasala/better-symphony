@@ -364,10 +364,10 @@ Better Symphony has first-class support for [Yolobox](https://github.com/finbarr
 agent:
   harness: claude                           # which agent to run: claude, codex, opencode
   yolobox: true
-  yolobox_arguments: ["--claude-config"]    # extra args passed to yolobox before the agent flags
+  yolobox_arguments: []                     # extra args passed to yolobox before the agent flags
 ```
 
-This produces: `yolobox claude --claude-config -- -p "..." --output-format stream-json --verbose ...`
+This produces: `yolobox claude -- -p "..." --output-format stream-json --verbose ...`
 
 When yolobox is enabled, Symphony automatically:
 - **Mounts** the Symphony source directory into the container (so `$SYMPHONY_LINEAR` resolves correctly)

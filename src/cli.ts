@@ -115,6 +115,10 @@ function printHelp(): void {
 Symphony - Coding Agent Orchestrator
 
 Usage: symphony [options] [workflow-paths...]
+       symphony yolobox <binary> [args...]
+
+Commands:
+  yolobox <binary> [args...]   Spawn an interactive yolobox session (forwards CLAUDE_CODE_OAUTH_TOKEN)
 
 Options:
   -w, --workflow <paths...>  Workflow file(s) (default: workflows/*.md)
@@ -143,6 +147,8 @@ Examples:
   symphony --dry-run                                # Preview rendered prompts
   symphony --routes                                 # Print routing rules for all workflows
   symphony --routes -f dev                          # Print routing rules for dev workflow only
+  symphony yolobox claude                           # Interactive claude session inside yolobox
+  symphony yolobox claude -p "hello"                # Pass extra args to claude
 
 Environment Variables:
   LINEAR_API_KEY                Linear API key (required)
@@ -268,9 +274,60 @@ function printRoutes(workflows: ExpandedWorkflow[]): void {
   }
 }
 
+// ── Yolobox Mode ───────────────────────────────────────────────
+
+async function runYolobox(args: string[]): Promise<void> {
+  const binary = args[0];
+  if (!binary) {
+    console.error("Usage: better-symphony yolobox <binary> [args...]");
+    console.error("Example: better-symphony yolobox claude");
+    process.exit(1);
+  }
+
+  const extraArgs = args.slice(1);
+  const symphonyRoot = new URL("../", import.meta.url).pathname.replace(/\/$/, "");
+
+  const yoloboxArgs: string[] = [binary];
+
+  // Mount symphony source so $SYMPHONY_LINEAR path works inside the container
+  yoloboxArgs.push("--mount", `${symphonyRoot}:${symphonyRoot}`);
+
+  const envVarNames: string[] = [];
+  if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+    yoloboxArgs.push("--env", `CLAUDE_CODE_OAUTH_TOKEN=${process.env.CLAUDE_CODE_OAUTH_TOKEN}`);
+    envVarNames.push("CLAUDE_CODE_OAUTH_TOKEN");
+  }
+  if (process.env.LINEAR_API_KEY) {
+    yoloboxArgs.push("--env", `SYMPHONY_LINEAR_API_KEY=${process.env.LINEAR_API_KEY}`);
+    envVarNames.push("SYMPHONY_LINEAR_API_KEY");
+  }
+
+  if (extraArgs.length > 0) {
+    yoloboxArgs.push("--", ...extraArgs);
+  }
+
+  console.log(`Spawning: yolobox ${binary}` +
+    (envVarNames.length > 0 ? ` (forwarding: ${envVarNames.join(", ")})` : "") +
+    (extraArgs.length > 0 ? ` -- ${extraArgs.join(" ")}` : ""));
+
+  const proc = Bun.spawn(["yolobox", ...yoloboxArgs], {
+    stdio: ["inherit", "inherit", "inherit"],
+  });
+
+  const exitCode = await proc.exited;
+  process.exit(exitCode);
+}
+
 // ── Main ────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  // Check for subcommands before parsing flags
+  const firstArg = process.argv[2];
+  if (firstArg === "yolobox") {
+    await runYolobox(process.argv.slice(3));
+    return;
+  }
+
   const options = parseArgs();
 
   // Validate all workflow files exist

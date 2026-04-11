@@ -33,7 +33,7 @@ agent:
   binary: claude
   max_concurrent_agents: 1
   yolobox: true
-  yolobox_arguments: ["--claude-config"]
+  yolobox_arguments: []
 ---
 
 # Ralph Loop - Subtask {{ subtask_index }}/{{ total_subtasks }}

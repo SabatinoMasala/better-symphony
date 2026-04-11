@@ -20,7 +20,7 @@ hooks:
 agent:
     binary: claude
     yolobox: true
-    yolobox_arguments: ["--claude-config"]
+    yolobox_arguments: []
 ---
 
 # PR Review Agent

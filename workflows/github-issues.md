@@ -31,7 +31,7 @@ agent:
   binary: claude
   max_concurrent_agents: 2
   yolobox: true
-  yolobox_arguments: ["--claude-config"]
+  yolobox_arguments: []
 
 ---
 
