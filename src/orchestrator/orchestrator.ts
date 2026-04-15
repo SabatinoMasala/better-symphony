@@ -98,6 +98,12 @@ export class Orchestrator {
     return this.config?.tracker.kind === "github-pr" || this.config?.tracker.kind === "github-issues";
   }
 
+  /** True for any non-Linear tracker kind — these route through the Tracker abstraction (`this.tracker`) instead of `this.linearClient`. */
+  private usesTrackerAbstraction(): boolean {
+    const kind = this.config?.tracker.kind;
+    return kind === "github-pr" || kind === "github-issues" || kind === "jira" || kind === "cron";
+  }
+
   private isCronTracker(): boolean {
     return this.config?.tracker.kind === "cron";
   }
@@ -109,10 +115,11 @@ export class Orchestrator {
       return this.tracker.fetchCandidates({});
     }
 
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.fetchCandidates({
         excludedLabels: this.config.tracker.excluded_labels,
         requiredLabels: this.config.tracker.required_labels,
+        activeStates: this.config.tracker.active_states,
       });
     }
 
@@ -124,7 +131,7 @@ export class Orchestrator {
   }
 
   private async getIssue(identifier: string): Promise<Issue | null> {
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.getIssue(identifier);
     }
     if (!this.linearClient) throw new Error("Linear client not initialized");
@@ -170,7 +177,7 @@ export class Orchestrator {
   private async fetchIssuesByStates(states: string[]): Promise<Issue[]> {
     if (!this.config) throw new Error("Config not initialized");
 
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.fetchTerminalIssues(states);
     }
 
@@ -182,7 +189,7 @@ export class Orchestrator {
   }
 
   private async fetchIssueStatesByIds(ids: string[]): Promise<Map<string, string>> {
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.fetchStatesByIds(ids);
     }
     if (!this.linearClient) throw new Error("Linear client not initialized");
@@ -190,7 +197,7 @@ export class Orchestrator {
   }
 
   private async upsertComment(issueId: string, body: string, commentId?: string | null): Promise<string> {
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.upsertComment(issueId, body, commentId ?? undefined);
     }
     if (!this.linearClient) throw new Error("Linear client not initialized");
@@ -198,7 +205,7 @@ export class Orchestrator {
   }
 
   private async addLabel(issueId: string, label: string, color?: string): Promise<void> {
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.addLabel(issueId, label);
     }
     if (!this.linearClient) throw new Error("Linear client not initialized");
@@ -1282,9 +1289,9 @@ export class Orchestrator {
    * Transition a parent issue to "Done" after all subtasks complete
    */
   private async transitionIssueToDone(issue: Issue): Promise<void> {
-    // GitHub PRs use labels, not state transitions
-    if (this.isGitHubTracker()) {
-      logger.info(`Skipping state transition for GitHub PR ${issue.identifier} (use labels instead)`);
+    // Only Linear supports free-form state transitions; other trackers use labels.
+    if (this.config?.tracker.kind !== "linear") {
+      logger.info(`Skipping state transition for ${issue.identifier} (non-linear tracker uses labels instead)`);
       return;
     }
 
