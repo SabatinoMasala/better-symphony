@@ -19,7 +19,7 @@ workspace:
 
 hooks:
     after_create: |
-        git clone git@github.com:your-org/your-repo.git .
+        git clone git@github.com:KarelBrijs/better-symphony.git .
     before_run: |
         git fetch origin main
         git checkout main

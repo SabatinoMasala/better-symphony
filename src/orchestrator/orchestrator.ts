@@ -357,6 +357,64 @@ export class Orchestrator {
       return;
     }
 
+    // Non-Linear trackers: instantiate the appropriate Tracker directly and
+    // fetch candidates via its abstraction, skipping the LinearClient path.
+    if (
+      this.config.tracker.kind === "jira" ||
+      this.config.tracker.kind === "github-pr" ||
+      this.config.tracker.kind === "github-issues"
+    ) {
+      let tracker: Tracker;
+      if (this.config.tracker.kind === "jira") {
+        tracker = new JiraTracker({
+          kind: "jira",
+          project_slug: this.config.tracker.project_slug,
+          excluded_labels: this.config.tracker.excluded_labels,
+          required_labels: this.config.tracker.required_labels,
+          active_states: this.config.tracker.active_states,
+          terminal_states: this.config.tracker.terminal_states,
+        });
+      } else if (this.config.tracker.kind === "github-pr") {
+        tracker = new GitHubPRTracker({
+          kind: "github-pr",
+          repo: this.config.tracker.repo,
+          excluded_labels: this.config.tracker.excluded_labels,
+          required_labels: this.config.tracker.required_labels,
+        });
+      } else {
+        tracker = new GitHubIssuesTracker({
+          kind: "github-issues",
+          repo: this.config.tracker.repo,
+          excluded_labels: this.config.tracker.excluded_labels,
+          required_labels: this.config.tracker.required_labels,
+          active_states: this.config.tracker.active_states,
+          terminal_states: this.config.tracker.terminal_states,
+        });
+      }
+
+      const issues = await tracker.fetchCandidates({
+        requiredLabels: this.config.tracker.required_labels,
+        excludedLabels: this.config.tracker.excluded_labels,
+        activeStates: this.config.tracker.active_states,
+      });
+
+      if (issues.length === 0) {
+        console.log("No matching issues found.");
+        return;
+      }
+
+      console.log(`Found ${issues.length} matching issue(s):\n`);
+      for (const issue of issues) {
+        const prompt = await renderPrompt(this.workflow.prompt_template, issue, null);
+        console.log(`${"─".repeat(60)}`);
+        console.log(`Issue: ${issue.identifier}: ${issue.title}`);
+        console.log(`${"─".repeat(60)}`);
+        console.log(prompt);
+        console.log();
+      }
+      return;
+    }
+
     this.linearClient = new LinearClient(
       this.config.tracker.endpoint,
       this.config.tracker.api_key

@@ -206,7 +206,7 @@ function printRoutes(workflows: ExpandedWorkflow[]): void {
         : loadWorkflow(wf.path);
       const config = buildServiceConfig(workflow);
       const t = config.tracker;
-      const scope = t.kind === "linear" ? t.project_slug : t.repo;
+      const scope = t.kind === "linear" || t.kind === "jira" ? t.project_slug : t.repo;
 
       routeInfos.push({
         name,
@@ -219,6 +219,8 @@ function printRoutes(workflows: ExpandedWorkflow[]): void {
       console.log(`${name} (${t.kind})`);
       if (t.kind === "linear") {
         console.log(`  Project:          ${t.project_slug || "(none)"}`);
+      } else if (t.kind === "jira") {
+        console.log(`  Jira project:     ${t.project_slug || "(none)"}`);
       } else {
         console.log(`  Repo:             ${t.repo || "(none)"}`);
       }

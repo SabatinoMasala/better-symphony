@@ -247,8 +247,8 @@ export class JiraTracker implements Tracker {
   // ── Tracker Interface ──────────────────────────────────────────
 
   async fetchCandidates(options: FetchOptions): Promise<Issue[]> {
-    const requireLabels = [...this.requiredLabels, ...(options.requiredLabels ?? [])];
-    const excludeLabels = [...this.excludedLabels, ...(options.excludedLabels ?? [])];
+    const requireLabels = [...new Set([...this.requiredLabels, ...(options.requiredLabels ?? [])])];
+    const excludeLabels = [...new Set([...this.excludedLabels, ...(options.excludedLabels ?? [])])];
 
     const jql = this.buildJql(requireLabels, excludeLabels);
     const limit = options.limit ?? 50;
@@ -259,7 +259,7 @@ export class JiraTracker implements Tracker {
       fields: "summary,description,labels,status,priority,creator,reporter,assignee,created,updated,comment,subtasks,project,issuetype",
     });
 
-    const response = await this.request<JiraSearchResponse>("GET", `/search?${params.toString()}`);
+    const response = await this.request<JiraSearchResponse>("GET", `/search/jql?${params.toString()}`);
     return response.issues.map((i) => this.normalize(i));
   }
 
@@ -287,7 +287,7 @@ export class JiraTracker implements Tracker {
       maxResults: "50",
       fields: "summary,labels,status,created,updated",
     });
-    const response = await this.request<JiraSearchResponse>("GET", `/search?${params.toString()}`);
+    const response = await this.request<JiraSearchResponse>("GET", `/search/jql?${params.toString()}`);
     return response.issues.map((i) => this.normalize(i));
   }
 
