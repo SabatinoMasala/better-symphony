@@ -32,6 +32,7 @@ import { LinearClient } from "../tracker/client.js";
 import { GitHubPRTracker } from "../tracker/github-pr-tracker.js";
 import { GitHubIssuesTracker } from "../tracker/github-issues-tracker.js";
 import { CronTracker } from "../tracker/cron-tracker.js";
+import { JiraTracker } from "../tracker/jira.js";
 import type { Tracker } from "../tracker/interface.js";
 import { WorkspaceManager } from "../workspace/manager.js";
 import { ClaudeRunner } from "../agent/claude-runner.js";
@@ -254,6 +255,17 @@ export class Orchestrator {
         terminal_states: this.config.tracker.terminal_states,
       });
       logger.info("Using GitHub Issues tracker", { repo: this.config.tracker.repo });
+    } else if (this.config.tracker.kind === "jira") {
+      // Jira tracker
+      this.tracker = new JiraTracker({
+        kind: "jira",
+        project_slug: this.config.tracker.project_slug,
+        excluded_labels: this.config.tracker.excluded_labels,
+        required_labels: this.config.tracker.required_labels,
+        active_states: this.config.tracker.active_states,
+        terminal_states: this.config.tracker.terminal_states,
+      });
+      logger.info("Using Jira tracker", { project: this.config.tracker.project_slug });
     } else {
       // Linear tracker (default)
       if (!this.linearClient) {

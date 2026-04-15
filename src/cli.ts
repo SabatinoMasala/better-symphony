@@ -301,6 +301,12 @@ async function runYolobox(args: string[]): Promise<void> {
     yoloboxArgs.push("--env", `SYMPHONY_LINEAR_API_KEY=${process.env.LINEAR_API_KEY}`);
     envVarNames.push("SYMPHONY_LINEAR_API_KEY");
   }
+  for (const name of ["JIRA_HOST", "JIRA_EMAIL", "JIRA_API_TOKEN"]) {
+    if (process.env[name]) {
+      yoloboxArgs.push("--env", `${name}=${process.env[name]}`);
+      envVarNames.push(name);
+    }
+  }
 
   if (extraArgs.length > 0) {
     yoloboxArgs.push("--", ...extraArgs);
