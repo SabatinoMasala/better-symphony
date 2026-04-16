@@ -22,8 +22,10 @@ interface WorkflowEntry {
   profileName?: string;
   apiKey: string;
   orchestrator: Orchestrator;
-  /** Cron workflows run their own poll loop independently */
+  /** Cron workflows run their own poll loop independently and can be triggered by name */
   isCron: boolean;
+  /** True only for Linear workflows that participate in the shared LinearClient poll loop */
+  usesSharedLinear: boolean;
 }
 
 export class MultiOrchestrator {
@@ -58,10 +60,13 @@ export class MultiOrchestrator {
         throw new Error(`Workflow validation failed for ${wf.virtualName}: ${validation.errors.join(", ")}`);
       }
 
-      const isCron = config.tracker.kind === "cron";
+      const kind = config.tracker.kind;
+      const isLinear = kind === "linear";
+      const isCron = kind === "cron";
 
-      if (isCron) {
-        // Cron workflows run their own poll loop independently
+      if (!isLinear) {
+        // Non-linear workflows (cron, jira, github-*) run their own poll loop independently —
+        // only the Linear tracker shares a LinearClient via the multi-orchestrator.
         const orchestrator = new Orchestrator({
           workflowPath: wf.path,
           profileName: wf.profileName,
@@ -70,9 +75,16 @@ export class MultiOrchestrator {
         });
 
         await orchestrator.start();
-        this.entries.push({ path: wf.path, profileName: wf.profileName, apiKey: "", orchestrator, isCron: true });
+        this.entries.push({
+          path: wf.path,
+          profileName: wf.profileName,
+          apiKey: "",
+          orchestrator,
+          isCron,
+          usesSharedLinear: false,
+        });
       } else {
-        // Tracker workflows share LinearClients and use managed polling
+        // Linear workflows share LinearClients and use managed polling
         const apiKey = config.tracker.api_key;
         const client = this.getOrCreateClient(config.tracker.endpoint, apiKey);
 
@@ -85,14 +97,21 @@ export class MultiOrchestrator {
         });
 
         await orchestrator.start();
-        this.entries.push({ path: wf.path, profileName: wf.profileName, apiKey, orchestrator, isCron: false });
+        this.entries.push({
+          path: wf.path,
+          profileName: wf.profileName,
+          apiKey,
+          orchestrator,
+          isCron: false,
+          usesSharedLinear: true,
+        });
       }
 
-      logger.info(`Loaded workflow: ${wf.virtualName}${isCron ? " (cron)" : ""}`);
+      logger.info(`Loaded workflow: ${wf.virtualName} (${kind})`);
     }
 
     // Log detected API key sources (env var names, not values)
-    const trackerEntries = this.entries.filter(e => !e.isCron);
+    const trackerEntries = this.entries.filter(e => e.usesSharedLinear);
     const keySourceMap = new Map<string, string>();
     for (const entry of trackerEntries) {
       const rawWorkflow = loadWorkflow(entry.path);
@@ -160,7 +179,7 @@ export class MultiOrchestrator {
 
   private async pollTick(): Promise<void> {
     // Only tracker workflows use the shared poll loop; cron workflows run independently
-    const trackerEntries = this.entries.filter(e => !e.isCron);
+    const trackerEntries = this.entries.filter(e => e.usesSharedLinear);
     if (this.linearClients.size === 0 && trackerEntries.length === 0) return;
 
     try {
@@ -263,7 +282,7 @@ export class MultiOrchestrator {
     const groups = new Map<string, { apiKey: string; slug: string; items: Array<{ entry: WorkflowEntry; config: ServiceConfig }> }>();
 
     for (const entry of this.entries) {
-      if (entry.isCron) continue; // Cron workflows are not grouped
+      if (!entry.usesSharedLinear) continue; // Only Linear workflows are grouped for shared polling
       const config = entry.orchestrator.getServiceConfig();
       if (!config) continue;
 
@@ -284,7 +303,7 @@ export class MultiOrchestrator {
   private getPollInterval(): number {
     let min = 30000;
     for (const entry of this.entries) {
-      if (entry.isCron) continue;
+      if (!entry.usesSharedLinear) continue;
       const config = entry.orchestrator.getServiceConfig();
       if (config && config.polling.interval_ms < min) {
         min = config.polling.interval_ms;

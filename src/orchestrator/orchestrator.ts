@@ -32,6 +32,7 @@ import { LinearClient } from "../tracker/client.js";
 import { GitHubPRTracker } from "../tracker/github-pr-tracker.js";
 import { GitHubIssuesTracker } from "../tracker/github-issues-tracker.js";
 import { CronTracker } from "../tracker/cron-tracker.js";
+import { JiraTracker } from "../tracker/jira.js";
 import type { Tracker } from "../tracker/interface.js";
 import { WorkspaceManager } from "../workspace/manager.js";
 import { ClaudeRunner } from "../agent/claude-runner.js";
@@ -97,6 +98,12 @@ export class Orchestrator {
     return this.config?.tracker.kind === "github-pr" || this.config?.tracker.kind === "github-issues";
   }
 
+  /** True for any non-Linear tracker kind — these route through the Tracker abstraction (`this.tracker`) instead of `this.linearClient`. */
+  private usesTrackerAbstraction(): boolean {
+    const kind = this.config?.tracker.kind;
+    return kind === "github-pr" || kind === "github-issues" || kind === "jira" || kind === "cron";
+  }
+
   private isCronTracker(): boolean {
     return this.config?.tracker.kind === "cron";
   }
@@ -108,10 +115,11 @@ export class Orchestrator {
       return this.tracker.fetchCandidates({});
     }
 
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.fetchCandidates({
         excludedLabels: this.config.tracker.excluded_labels,
         requiredLabels: this.config.tracker.required_labels,
+        activeStates: this.config.tracker.active_states,
       });
     }
 
@@ -123,7 +131,7 @@ export class Orchestrator {
   }
 
   private async getIssue(identifier: string): Promise<Issue | null> {
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.getIssue(identifier);
     }
     if (!this.linearClient) throw new Error("Linear client not initialized");
@@ -169,7 +177,7 @@ export class Orchestrator {
   private async fetchIssuesByStates(states: string[]): Promise<Issue[]> {
     if (!this.config) throw new Error("Config not initialized");
 
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.fetchTerminalIssues(states);
     }
 
@@ -181,7 +189,7 @@ export class Orchestrator {
   }
 
   private async fetchIssueStatesByIds(ids: string[]): Promise<Map<string, string>> {
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.fetchStatesByIds(ids);
     }
     if (!this.linearClient) throw new Error("Linear client not initialized");
@@ -189,7 +197,7 @@ export class Orchestrator {
   }
 
   private async upsertComment(issueId: string, body: string, commentId?: string | null): Promise<string> {
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.upsertComment(issueId, body, commentId ?? undefined);
     }
     if (!this.linearClient) throw new Error("Linear client not initialized");
@@ -197,7 +205,7 @@ export class Orchestrator {
   }
 
   private async addLabel(issueId: string, label: string, color?: string): Promise<void> {
-    if (this.isGitHubTracker() && this.tracker) {
+    if (this.usesTrackerAbstraction() && this.tracker) {
       return this.tracker.addLabel(issueId, label);
     }
     if (!this.linearClient) throw new Error("Linear client not initialized");
@@ -254,6 +262,17 @@ export class Orchestrator {
         terminal_states: this.config.tracker.terminal_states,
       });
       logger.info("Using GitHub Issues tracker", { repo: this.config.tracker.repo });
+    } else if (this.config.tracker.kind === "jira") {
+      // Jira tracker
+      this.tracker = new JiraTracker({
+        kind: "jira",
+        project_slug: this.config.tracker.project_slug,
+        excluded_labels: this.config.tracker.excluded_labels,
+        required_labels: this.config.tracker.required_labels,
+        active_states: this.config.tracker.active_states,
+        terminal_states: this.config.tracker.terminal_states,
+      });
+      logger.info("Using Jira tracker", { project: this.config.tracker.project_slug });
     } else {
       // Linear tracker (default)
       if (!this.linearClient) {
@@ -342,6 +361,64 @@ export class Orchestrator {
       console.log(`${"─".repeat(60)}`);
       console.log(prompt);
       console.log();
+      return;
+    }
+
+    // Non-Linear trackers: instantiate the appropriate Tracker directly and
+    // fetch candidates via its abstraction, skipping the LinearClient path.
+    if (
+      this.config.tracker.kind === "jira" ||
+      this.config.tracker.kind === "github-pr" ||
+      this.config.tracker.kind === "github-issues"
+    ) {
+      let tracker: Tracker;
+      if (this.config.tracker.kind === "jira") {
+        tracker = new JiraTracker({
+          kind: "jira",
+          project_slug: this.config.tracker.project_slug,
+          excluded_labels: this.config.tracker.excluded_labels,
+          required_labels: this.config.tracker.required_labels,
+          active_states: this.config.tracker.active_states,
+          terminal_states: this.config.tracker.terminal_states,
+        });
+      } else if (this.config.tracker.kind === "github-pr") {
+        tracker = new GitHubPRTracker({
+          kind: "github-pr",
+          repo: this.config.tracker.repo,
+          excluded_labels: this.config.tracker.excluded_labels,
+          required_labels: this.config.tracker.required_labels,
+        });
+      } else {
+        tracker = new GitHubIssuesTracker({
+          kind: "github-issues",
+          repo: this.config.tracker.repo,
+          excluded_labels: this.config.tracker.excluded_labels,
+          required_labels: this.config.tracker.required_labels,
+          active_states: this.config.tracker.active_states,
+          terminal_states: this.config.tracker.terminal_states,
+        });
+      }
+
+      const issues = await tracker.fetchCandidates({
+        requiredLabels: this.config.tracker.required_labels,
+        excludedLabels: this.config.tracker.excluded_labels,
+        activeStates: this.config.tracker.active_states,
+      });
+
+      if (issues.length === 0) {
+        console.log("No matching issues found.");
+        return;
+      }
+
+      console.log(`Found ${issues.length} matching issue(s):\n`);
+      for (const issue of issues) {
+        const prompt = await renderPrompt(this.workflow.prompt_template, issue, null);
+        console.log(`${"─".repeat(60)}`);
+        console.log(`Issue: ${issue.identifier}: ${issue.title}`);
+        console.log(`${"─".repeat(60)}`);
+        console.log(prompt);
+        console.log();
+      }
       return;
     }
 
@@ -768,12 +845,24 @@ export class Orchestrator {
         // Agent exited — check the issue's current state to determine outcome
         const freshIssue = await this.getIssue(issue.identifier);
         const freshState = freshIssue?.state?.trim().toLowerCase();
-        const isTerminal = freshState && config.tracker.terminal_states.some(
-          (s) => s.trim().toLowerCase() === freshState
-        );
-        const isError = freshState && config.tracker.error_states.some(
-          (s) => s.trim().toLowerCase() === freshState
-        );
+
+        // Jira uses label-based status tracking (e.g. agent:dev → agent:dev:done),
+        // not workflow state transitions. A run is successful if the issue now has
+        // any label that is in excluded_labels — that means Claude transitioned it
+        // to a terminal label state and the ticket should not be retried.
+        const isJira = config.tracker.kind === "jira";
+        const isTerminal = isJira
+          ? freshIssue?.labels.some((l) =>
+              config.tracker.excluded_labels.some((ex) => ex === l)
+            ) ?? false
+          : freshState && config.tracker.terminal_states.some(
+              (s) => s.trim().toLowerCase() === freshState
+            );
+        const isError = isJira
+          ? false
+          : freshState && config.tracker.error_states.some(
+              (s) => s.trim().toLowerCase() === freshState
+            );
 
         if (isTerminal) {
           runAttempt.status = "Succeeded";
@@ -1212,9 +1301,9 @@ export class Orchestrator {
    * Transition a parent issue to "Done" after all subtasks complete
    */
   private async transitionIssueToDone(issue: Issue): Promise<void> {
-    // GitHub PRs use labels, not state transitions
-    if (this.isGitHubTracker()) {
-      logger.info(`Skipping state transition for GitHub PR ${issue.identifier} (use labels instead)`);
+    // Only Linear supports free-form state transitions; other trackers use labels.
+    if (this.config?.tracker.kind !== "linear") {
+      logger.info(`Skipping state transition for ${issue.identifier} (non-linear tracker uses labels instead)`);
       return;
     }
 

@@ -83,7 +83,7 @@ export interface ExpandedWorkflow {
 }
 
 export interface TrackerConfig {
-  kind: "linear" | "github-pr" | "github-issues" | "cron";
+  kind: "linear" | "github-pr" | "github-issues" | "cron" | "jira";
   // Linear-specific
   endpoint?: string;
   api_key?: string;
@@ -154,7 +154,7 @@ export interface AgentConfig {
 
 export interface ServiceConfig {
   tracker: {
-    kind: "linear" | "github-pr" | "github-issues" | "cron";
+    kind: "linear" | "github-pr" | "github-issues" | "cron" | "jira"; // service-level
     // Linear-specific (required for linear, empty string for github-pr)
     endpoint: string;
     api_key: string;

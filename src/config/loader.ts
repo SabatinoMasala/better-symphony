@@ -138,7 +138,7 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
 
   // Tracker config
   const trackerKind = cfg.tracker?.kind || "linear";
-  if (trackerKind !== "linear" && trackerKind !== "github-pr" && trackerKind !== "github-issues" && trackerKind !== "cron") {
+  if (trackerKind !== "linear" && trackerKind !== "github-pr" && trackerKind !== "github-issues" && trackerKind !== "cron" && trackerKind !== "jira") {
     throw new WFError("workflow_parse_error", `Unsupported tracker kind: ${trackerKind}`);
   }
 
@@ -170,7 +170,7 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
 
   return {
     tracker: {
-      kind: trackerKind as "linear" | "github-pr" | "github-issues" | "cron",
+      kind: trackerKind as "linear" | "github-pr" | "github-issues" | "cron" | "jira",
       // Linear-specific (empty for github-pr)
       endpoint: cfg.tracker?.endpoint || DEFAULT_LINEAR_ENDPOINT,
       api_key: apiKey,
@@ -179,11 +179,13 @@ export function buildServiceConfig(workflow: WorkflowDefinition): ServiceConfig 
         trackerKind === "cron" ? ["scheduled"] :
         trackerKind === "github-pr" ? ["Open"] :
         trackerKind === "github-issues" ? ["open"] :
+        trackerKind === "jira" ? ["To Do", "In Progress"] :
         DEFAULT_ACTIVE_STATES),
       terminal_states: parseStateList(cfg.tracker?.terminal_states,
         trackerKind === "cron" ? ["completed"] :
         trackerKind === "github-pr" ? ["Closed"] :
         trackerKind === "github-issues" ? ["closed"] :
+        trackerKind === "jira" ? ["Done", "Closed", "Cancelled"] :
         DEFAULT_TERMINAL_STATES),
       error_states: parseStateList(cfg.tracker?.error_states, DEFAULT_ERROR_STATES),
       // GitHub-specific (empty for linear)
@@ -259,6 +261,15 @@ export function validateServiceConfig(config: ServiceConfig): ValidationResult {
   if (config.tracker.kind === "github-issues") {
     if (!config.tracker.repo) {
       errors.push("tracker.repo is required for GitHub Issues tracker (e.g., 'owner/repo')");
+    }
+  }
+
+  if (config.tracker.kind === "jira") {
+    if (!config.tracker.project_slug) {
+      errors.push("tracker.project_slug is required for Jira tracker (the Jira project key, e.g. 'PROJ')");
+    }
+    if (!process.env.JIRA_HOST || !process.env.JIRA_EMAIL || !process.env.JIRA_API_TOKEN) {
+      errors.push("Jira tracker requires JIRA_HOST, JIRA_EMAIL, and JIRA_API_TOKEN environment variables");
     }
   }
 
