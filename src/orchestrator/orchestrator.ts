@@ -845,12 +845,24 @@ export class Orchestrator {
         // Agent exited — check the issue's current state to determine outcome
         const freshIssue = await this.getIssue(issue.identifier);
         const freshState = freshIssue?.state?.trim().toLowerCase();
-        const isTerminal = freshState && config.tracker.terminal_states.some(
-          (s) => s.trim().toLowerCase() === freshState
-        );
-        const isError = freshState && config.tracker.error_states.some(
-          (s) => s.trim().toLowerCase() === freshState
-        );
+
+        // Jira uses label-based status tracking (e.g. agent:dev → agent:dev:done),
+        // not workflow state transitions. A run is successful if the issue now has
+        // any label that is in excluded_labels — that means Claude transitioned it
+        // to a terminal label state and the ticket should not be retried.
+        const isJira = config.tracker.kind === "jira";
+        const isTerminal = isJira
+          ? freshIssue?.labels.some((l) =>
+              config.tracker.excluded_labels.some((ex) => ex === l)
+            ) ?? false
+          : freshState && config.tracker.terminal_states.some(
+              (s) => s.trim().toLowerCase() === freshState
+            );
+        const isError = isJira
+          ? false
+          : freshState && config.tracker.error_states.some(
+              (s) => s.trim().toLowerCase() === freshState
+            );
 
         if (isTerminal) {
           runAttempt.status = "Succeeded";
