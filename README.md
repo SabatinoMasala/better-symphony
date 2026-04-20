@@ -238,6 +238,52 @@ When done, use `gh pr edit {{ issue.number }} --add-label "review:complete"` to 
 
 The GitHub PR tracker exposes additional template variables: `issue.branch_name`, `issue.base_branch`, `issue.author`, `issue.files_changed`, and `issue.comments`.
 
+### Jira Tracker
+
+For Jira Cloud, use `kind: jira`. Auth uses the `JIRA_HOST`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` environment variables (Basic auth, `email:token` base64-encoded).
+
+```yaml
+---
+tracker:
+  kind: jira
+  project_slug: PROJ            # Jira project key
+  terminal_states: [Done, Closed, Cancelled]
+  required_labels: [agent:dev]
+  excluded_labels: [agent:dev:done, agent:dev:progress, agent:dev:error]
+
+workspace:
+  root: ~/.symphony/jira-dev
+
+agent:
+  binary: claude
+  yolobox: true
+---
+
+You are implementing **{{ issue.identifier }}**: {{ issue.title }}
+```
+
+**Config options:**
+
+| Option | Description |
+|--------|-------------|
+| `project_slug` | Jira project key (e.g. `PROJ`). Required. |
+| `required_labels` | Labels that must be present for an issue to be claimed |
+| `excluded_labels` | Labels that exclude an issue from claiming |
+| `terminal_states` | Jira statuses considered terminal (default: `Done`, `Closed`, `Cancelled`) |
+| `active_states` | Jira statuses to consider active (informational; filtering is by `status not in terminal_states`) |
+
+The Jira tracker polls with JQL: `project = {project} AND labels = {required_label} AND status not in ({terminal_states})`. Status transitions in Symphony are label-driven (e.g. `agent:dev` → `agent:dev:progress` → `agent:dev:done`) — agents call `$SYMPHONY_JIRA` to swap labels rather than transitioning Jira workflows directly. Subtasks (`issue.children`) are populated from Jira's `subtasks` field.
+
+Agents running under a Jira workflow get `SYMPHONY_JIRA` (path to the Jira CLI) plus the `JIRA_HOST` / `JIRA_EMAIL` / `JIRA_API_TOKEN` env vars forwarded into their environment:
+
+```bash
+bun $SYMPHONY_JIRA get-issue PROJ-123
+bun $SYMPHONY_JIRA add-label PROJ-123 "agent:dev:done"
+bun $SYMPHONY_JIRA remove-label PROJ-123 "agent:dev"
+bun $SYMPHONY_JIRA create-comment PROJ-123 "PR created: <link>"
+bun $SYMPHONY_JIRA create-subtask --parent PROJ-123 --title "Implement X"
+```
+
 ### Cron Tracker
 
 For scheduled tasks that run on a cron schedule instead of polling an issue tracker, use `kind: cron`:
@@ -395,7 +441,11 @@ To retry a failed issue: remove the `:error` label and re-add the base label.
 |----------|-------------|
 | `LINEAR_API_KEY` | Required for Linear tracker. Your Linear API key |
 | `GH_REPO` | Required for GitHub trackers. Repository in `owner/repo` format |
+| `JIRA_HOST` | Required for Jira tracker. e.g. `your-org.atlassian.net` |
+| `JIRA_EMAIL` | Required for Jira tracker. Atlassian account email |
+| `JIRA_API_TOKEN` | Required for Jira tracker. Atlassian API token |
 | `SYMPHONY_LINEAR` | Injected into agents. Path to the Linear CLI |
+| `SYMPHONY_JIRA` | Injected into agents. Path to the Jira CLI |
 | `SYMPHONY_WORKSPACE` | Injected into agents. Path to the issue workspace |
 | `SYMPHONY_ISSUE_IDENTIFIER` | Injected into agents. e.g., `SYM-123` or `ISSUE-123` |
 

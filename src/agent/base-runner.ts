@@ -274,14 +274,16 @@ export abstract class BaseRunner {
     // yolobox: yolobox <binary> [...yolobox_arguments] -- <agentArgs>
     const symphonyRoot = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
     const linearCliPath = new URL("../linear-cli.ts", import.meta.url).pathname;
+    const jiraCliPath = new URL("../jira-cli.ts", import.meta.url).pathname;
 
     const yoloboxExtraArgs: string[] = [];
-    // Mount symphony source so $SYMPHONY_LINEAR path works inside the container
+    // Mount symphony source so $SYMPHONY_LINEAR / $SYMPHONY_JIRA paths work inside the container
     yoloboxExtraArgs.push("--mount", `${symphonyRoot}:${symphonyRoot}`);
 
     // Forward env vars that yolobox doesn't auto-forward
     const envVars: Record<string, string> = {
       SYMPHONY_LINEAR: linearCliPath,
+      SYMPHONY_JIRA: jiraCliPath,
       SYMPHONY_WORKSPACE: workspacePath,
       SYMPHONY_ISSUE_ID: issue.id,
       SYMPHONY_ISSUE_IDENTIFIER: issue.identifier,
@@ -289,6 +291,12 @@ export abstract class BaseRunner {
     if (config.tracker.api_key) {
       envVars.SYMPHONY_LINEAR_API_KEY = config.tracker.api_key;
     }
+    if (config.tracker.kind === "jira" && config.tracker.project_slug) {
+      envVars.SYMPHONY_JIRA_PROJECT = config.tracker.project_slug;
+    }
+    if (process.env.JIRA_HOST) envVars.JIRA_HOST = process.env.JIRA_HOST;
+    if (process.env.JIRA_EMAIL) envVars.JIRA_EMAIL = process.env.JIRA_EMAIL;
+    if (process.env.JIRA_API_TOKEN) envVars.JIRA_API_TOKEN = process.env.JIRA_API_TOKEN;
     if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
       envVars.CLAUDE_CODE_OAUTH_TOKEN = process.env.CLAUDE_CODE_OAUTH_TOKEN;
     }
@@ -307,7 +315,11 @@ export abstract class BaseRunner {
       SYMPHONY_ISSUE_ID: issue.id,
       SYMPHONY_ISSUE_IDENTIFIER: issue.identifier,
       SYMPHONY_LINEAR: new URL("../linear-cli.ts", import.meta.url).pathname,
+      SYMPHONY_JIRA: new URL("../jira-cli.ts", import.meta.url).pathname,
       ...(config.tracker.api_key ? { SYMPHONY_LINEAR_API_KEY: config.tracker.api_key } : {}),
+      ...(config.tracker.kind === "jira" && config.tracker.project_slug
+        ? { SYMPHONY_JIRA_PROJECT: config.tracker.project_slug }
+        : {}),
     };
   }
 

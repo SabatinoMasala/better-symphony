@@ -8,3 +8,4 @@ export { LinearClient } from "./client.js";
 export { LinearTracker } from "./linear-tracker.js";
 export { GitHubPRTracker } from "./github-pr-tracker.js";
 export { CronTracker } from "./cron-tracker.js";
+export { JiraTracker } from "./jira.js";

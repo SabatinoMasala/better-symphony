@@ -65,7 +65,7 @@ describe("buildServiceConfig", () => {
 
   test("throws on invalid tracker kind", () => {
     expect(() =>
-      buildServiceConfig(makeWorkflow({ tracker: { kind: "jira" } }))
+      buildServiceConfig(makeWorkflow({ tracker: { kind: "bogus" as any } }))
     ).toThrow("Unsupported tracker kind");
   });
 
@@ -79,6 +79,13 @@ describe("buildServiceConfig", () => {
     const sc = buildServiceConfig(makeWorkflow({ tracker: { kind: "github-issues" } }));
     expect(sc.tracker.active_states).toEqual(["open"]);
     expect(sc.tracker.terminal_states).toEqual(["closed"]);
+  });
+
+  test("jira gets correct default active/terminal states", () => {
+    const sc = buildServiceConfig(makeWorkflow({ tracker: { kind: "jira" } }));
+    expect(sc.tracker.kind).toBe("jira");
+    expect(sc.tracker.active_states).toEqual(["To Do", "In Progress"]);
+    expect(sc.tracker.terminal_states).toEqual(["Done", "Closed", "Cancelled"]);
   });
 
   test("cron gets correct default active/terminal states", () => {
